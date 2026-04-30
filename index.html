@@ -1447,10 +1447,10 @@ body{
       <div id="heatmap-view">
         <div id="heatmap-canvas-wrap" style="min-height:400px;position:relative;">
           <div class="heatmap-legend">
-            <span style="color:var(--red)">LOW</span>
-            <div class="heatmap-legend-bar"></div>
-            <span style="color:var(--green)">HIGH</span>
-            <span style="margin-left:12px;color:var(--muted)">SIZE = 24H VOLUME · COLOR = SCORE</span>
+            <span style="color:var(--red)">◀ BEARISH</span>
+            <div class="heatmap-legend-bar" style="background:linear-gradient(90deg,rgba(255,40,40,0.8),rgba(200,160,50,0.7),rgba(0,230,118,0.85))"></div>
+            <span style="color:var(--green)">BULLISH ▶</span>
+            <span style="margin-left:12px;color:var(--muted)">SIZE = 24H VOLUME · COLOR = BIAS + SCORE</span>
           </div>
         </div>
       </div>
@@ -4474,12 +4474,28 @@ function renderHeatmap(results) {
     rows.push(rowItems);
   }
 
-  const scoreToColor = (score) => {
-    if (score>=75) return `rgba(0,230,118,${0.6+score/250})`;
-    if (score>=60) return `rgba(${Math.round(255*(75-score)/15)},${Math.round(230*(score-60)/15+100)},${Math.round(118*(score-60)/15)},0.75)`;
-    if (score>=45) return `rgba(255,213,79,0.65)`;
-    if (score>=30) return `rgba(255,${Math.round(100*(score-30)/15)},68,0.65)`;
-    return 'rgba(255,68,68,0.55)';
+  // Direction-aware color: GREEN = bullish high-confidence, RED = bearish high-confidence
+  // Gold = neutral/mixed regardless of score. Dim = low confidence.
+  const scoreToColor = (score, bias) => {
+    const isBull = bias && (bias.includes('bull'));
+    const isBear = bias && (bias.includes('bear'));
+    const alpha = 0.45 + (score / 100) * 0.45; // opacity scales with score
+
+    if (isBull) {
+      // Bullish: dark green (low score) → vivid green (high score)
+      if (score >= 75) return `rgba(0,230,118,${alpha})`;
+      if (score >= 60) return `rgba(0,${Math.round(160 + (score-60)*4.7)},${Math.round(60+(score-60)*3)},${alpha})`;
+      return `rgba(0,${Math.round(100+(score/60)*60)},60,${alpha - 0.1})`;
+    } else if (isBear) {
+      // Bearish: muted red (low score) → vivid red (high score)
+      if (score >= 75) return `rgba(255,${Math.round(40-(score-75)*1.5)},${Math.round(40-(score-75)*1.5)},${alpha})`;
+      if (score >= 60) return `rgba(220,${Math.round(80-(score-60)*2.7)},60,${alpha})`;
+      return `rgba(180,60,60,${alpha - 0.1})`;
+    } else {
+      // Neutral/mixed: gold spectrum
+      if (score >= 65) return `rgba(255,213,79,${alpha})`;
+      return `rgba(200,160,50,${alpha - 0.1})`;
+    }
   };
 
   let yOffset = legendH;
@@ -4496,11 +4512,14 @@ function renderHeatmap(results) {
       const w = Math.floor(rawWidths[ci] * scale);
       const block = document.createElement('div');
       block.className = 'heatmap-block';
-      block.style.cssText = `left:${xOffset}px;top:${yOffset}px;width:${w}px;height:${rowH}px;background:${scoreToColor(coin.score)};`;
+      block.style.cssText = `left:${xOffset}px;top:${yOffset}px;width:${w}px;height:${rowH}px;background:${scoreToColor(coin.score, coin.bias)};`;
       const fontSize = Math.max(8, Math.min(16, w/6));
+      const biasIcon = coin.bias && coin.bias.includes('bull') ? '▲' : coin.bias && coin.bias.includes('bear') ? '▼' : '◆';
+      const biasIconColor = coin.bias && coin.bias.includes('bull') ? 'rgba(0,230,118,0.9)' : coin.bias && coin.bias.includes('bear') ? 'rgba(255,80,80,0.9)' : 'rgba(255,213,79,0.8)';
       block.innerHTML = `
         <span class="heatmap-block-sym" style="font-size:${fontSize}px">${coin.symbol}</span>
-        <span class="heatmap-block-score" style="font-size:${Math.max(7,fontSize-2)}px">${coin.score}</span>`;
+        <span class="heatmap-block-score" style="font-size:${Math.max(7,fontSize-2)}px">${coin.score}</span>
+        <span style="font-size:${Math.max(6,fontSize-4)}px;color:${biasIconColor};position:absolute;bottom:4px;right:5px;line-height:1">${biasIcon}</span>`;
       block.addEventListener('mousemove', e => {
         const tt = document.getElementById('heatmap-tooltip');
         tt.style.left=(e.clientX+12)+'px';
