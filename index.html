@@ -4739,7 +4739,7 @@ function copyAnalysisOnly(d) {
   if (d.tradeRejected) {
     return `ATL ANALYSIS — ${ticker}USDT ${tf} — ${ts} UTC\n\nSETUP REJECTED — NO TRADE\nReason: ${(d.tradeDecisionReason||'INVALID_SETUP').replace(/_/g,' ')}\n\nBias: BULL ${d.bullPct}% vs BEAR ${100-d.bullPct}%\nWaiting for valid confluence before entry.\n\n— ATL · Market Intelligence Terminal`;
   }
-  return `ATL ANALYSIS — ${ticker}USDT ${tf} — ${ts} UTC\n\nBIAS: ${d.primaryDir === 'LONG' ? 'BULLISH' : 'BEARISH'} (${d.weightedScore}% confidence)\n\nPRIMARY SETUP:\n${d.primaryNarr}\n\nCOUNTER SCENARIO (${d.counterTxt}):\n${d.counterNarr}\n\n— ATL · Market Intelligence Terminal`;
+  return `ATL ANALYSIS — ${ticker}USDT ${tf} — ${ts} UTC\n\nBIAS: ${d.primaryDir === 'LONG' ? 'BULLISH' : 'BEARISH'} (${d.weightedScore}% confidence)\n\n${d.primaryNarr}\n\n— ATL · Market Intelligence Terminal`;
 }
 
 // Inject copy buttons into a trade card element
