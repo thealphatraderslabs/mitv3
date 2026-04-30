@@ -3503,6 +3503,7 @@ function updateTradeIdeas(data) {
     primaryLevels:pl, primaryNarr, counterTxt, counterLevels:cl, counterNarr,
     tradeRejected, tradeDecisionReason,
     longValid, shortValid, longStaleReason, shortStaleReason,
+    longEntryStatus, shortEntryStatus, longEntryDistPct, shortEntryDistPct,
     lastTrend, inDiscount, inPremium, struct, rsi, tqi, lsRatio, funding } = data;
   const isLong = primaryDir === 'LONG';
   const bearPct = 100-bullPct;
@@ -3571,6 +3572,28 @@ function updateTradeIdeas(data) {
         &nbsp;·&nbsp;Structure 40% · Location 25% · Momentum 30% · Derivatives 5%
       </div>
     </div>`;
+  // ENTRY STATUS BANNER — shows whether price is waiting for entry, in the zone, or already running
+  function entryStatusBanner(status, distPct, dir) {
+    const isL = dir === 'LONG';
+    if (status === 'in-trade') {
+      return `<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;margin-bottom:5px;background:rgba(0,230,118,0.08);border:1px solid rgba(0,230,118,0.25);border-left:3px solid var(--green)">
+        <span style="font-family:var(--font-head);font-size:9px;font-weight:700;color:var(--green);letter-spacing:0.12em">● IN TRADE</span>
+        <span style="font-size:8px;color:var(--sub);margin-left:auto">RIDING TOWARD ${isL?'TP2 ▲':'TP2 ▼'} · ENTRY TRIGGERED</span>
+      </div>`;
+    }
+    if (status === 'active') {
+      return `<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;margin-bottom:5px;background:rgba(255,213,79,0.08);border:1px solid rgba(255,213,79,0.3);border-left:3px solid var(--gold)">
+        <span style="font-family:var(--font-head);font-size:9px;font-weight:700;color:var(--gold);letter-spacing:0.12em">◉ ENTRY ZONE ACTIVE</span>
+        <span style="font-size:8px;color:var(--sub);margin-left:auto">WITHIN ${distPct}% OF ENTRY · ${isL?'WATCH FOR DEMAND':'WATCH FOR SUPPLY'}</span>
+      </div>`;
+    }
+    // waiting
+    return `<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;margin-bottom:5px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-left:3px solid var(--muted)">
+      <span style="font-family:var(--font-head);font-size:9px;font-weight:700;color:var(--muted);letter-spacing:0.12em">○ AWAITING ENTRY</span>
+      <span style="font-size:8px;color:var(--muted);margin-left:auto">${distPct}% FROM ENTRY · ${isL?'WAIT FOR PULLBACK':'WAIT FOR RALLY'}</span>
+    </div>`;
+  }
+
   // BUG-STALE-001 v3: reason strings are pre-built in generateTradeIdeas where all vars exist
   const primaryValid = isLong ? longValid : shortValid;
   const primaryStaleReason = isLong ? longStaleReason : shortStaleReason;
@@ -3581,6 +3604,7 @@ function updateTradeIdeas(data) {
         <span class="conviction-badge ${weightedScore>75?'high':weightedScore>=55?'mid':'low'}">${weightedScore>75?'HIGH CONVICTION':weightedScore>=55?'MED CONVICTION':'LOW CONVICTION'}</span>
         <span style="display:flex;align-items:center;gap:4px;margin-left:auto;font-size:8px;color:var(--muted)">CONF <div class="conf-bar">${pips}</div> ${confPips}/8</span>
       </div>
+      ${entryStatusBanner(isLong?longEntryStatus:shortEntryStatus, isLong?longEntryDistPct:shortEntryDistPct, primaryDir)}
       <div class="trade-levels">
         <div class="trade-level"><div class="tl-label">ENTRY ZONE <span style="font-size:7px;color:var(--blue)">${isLong?(data.longEntryReason||''):(data.shortEntryReason||'')}</span></div><div class="tl-val entry">${fmtPrice(pl.entry)}</div></div>
         <div class="trade-level"><div class="tl-label">STOP LOSS</div><div class="tl-val sl">${fmtPrice(pl.sl)}</div></div>
@@ -3603,6 +3627,7 @@ function updateTradeIdeas(data) {
         ${isCounterLong?'▲':'▼'} COUNTER: ${counterTxt}
         <span class="conviction-badge low">LOW CONVICTION</span>
       </div>
+      ${entryStatusBanner(isCounterLong?longEntryStatus:shortEntryStatus, isCounterLong?longEntryDistPct:shortEntryDistPct, counterTxt)}
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:3px;margin-bottom:5px">
         <div class="trade-level"><div class="tl-label">ENTRY</div><div class="tl-val" style="color:var(--sub);font-size:9px">${fmtPrice(cl.entry)}</div></div>
         <div class="trade-level"><div class="tl-label">SL</div><div class="tl-val sl" style="font-size:9px">${fmtPrice(cl.sl)}</div></div>
@@ -3919,6 +3944,29 @@ function generateTradeIdeas(candles, stData, swings, fvgs, srLevels, rsi, er, tq
     ? `Counter-trend SHORT (confidence ${100-weightedScore}% — Low). Valid only on ${inPremium?'rejection candle from premium zone':'CHoCH confirmation on lower TF'}. Entry ${fmtPrice(shortEntry)} (${shortEntryReason}), SL ${fmtPrice(shortSL)}, TP1 ${fmtPrice(shortTP1)}.`
     : `Counter-trend LONG (confidence ${weightedScore}% — Low). Valid only on ${inDiscount?'strong demand reaction at discount zone':'BOS confirmation on lower TF'}. Entry ${fmtPrice(longEntry)} (${longEntryReason}), SL ${fmtPrice(longSL)}, TP1 ${fmtPrice(longTP1)}.`;
 
+  // ENTRY STATUS: computed here where atr and all level vars exist.
+  // Three states per direction — used by updateTradeIdeas to render the status banner.
+  //   'active'   — price is within 0.5× ATR of entry (in zone / just triggered)
+  //   'in-trade' — price has passed entry in trade direction (riding toward targets)
+  //   'waiting'  — entry not yet reached
+  const longEntryDist  = longEntry - currentPrice;   // positive = price below entry (waiting for pullback)
+  const shortEntryDist = currentPrice - shortEntry;  // positive = price above entry (waiting for rally) — NOTE: shortEntry > currentPrice always, so this is negative; use shortEntry - currentPrice
+  const _shortDist     = shortEntry - currentPrice;  // positive when waiting (entry above price)
+
+  const longEntryStatus =
+    Math.abs(longEntryDist) <= atr * 0.5 ? 'active'      // within half ATR — entry zone hit
+    : currentPrice > longEntry            ? 'in-trade'    // price above entry — long running
+    :                                       'waiting';    // price below entry — awaiting pullback
+
+  const shortEntryStatus =
+    Math.abs(_shortDist) <= atr * 0.5    ? 'active'      // within half ATR — entry zone hit
+    : currentPrice < shortEntry           ? 'in-trade'    // price below entry — short running
+    :                                       'waiting';    // price above entry — awaiting rally
+
+  // Distance string for display: how far price is from entry
+  const longEntryDistPct  = longEntry > 0  ? ((Math.abs(longEntryDist)  / longEntry)  * 100).toFixed(2) : '0.00';
+  const shortEntryDistPct = shortEntry > 0 ? ((_shortDist > 0 ? _shortDist : Math.abs(_shortDist)) / shortEntry * 100).toFixed(2) : '0.00';
+
   // BUG-STALE-001 v3: compute reason strings HERE where currentPrice and all level vars are in scope.
   // updateTradeIdeas does NOT have currentPrice — passing pre-built strings avoids ReferenceError.
   const longStaleReason =
@@ -3944,6 +3992,8 @@ function generateTradeIdeas(candles, stData, swings, fvgs, srLevels, rsi, er, tq
     tradeRejected, tradeDecisionReason: _tradeDecision.reason,
     // BUG-STALE-001: validity flags + pre-built reason strings (computed here where all vars exist)
     longValid, shortValid, longStaleReason, shortStaleReason,
+    // ENTRY STATUS: 'waiting' | 'active' | 'in-trade' — for status banner on trade cards
+    longEntryStatus, shortEntryStatus, longEntryDistPct, shortEntryDistPct,
     // SMC checklist fields — needed by updateTradeIdeas BUG-015 fix
     lastTrend, inDiscount, inPremium, struct, rsi, tqi, lsRatio, funding,
   };
