@@ -1309,6 +1309,44 @@ body{
   #mobile-panel-tabs{display:none;}
   #panel-deriv,#panel-trade{display:block!important;}
 }
+
+/* ── ATL Disclaimer Banner ── */
+#atl-disclaimer{
+  position:fixed;
+  bottom:0;left:var(--rail-w);right:0;
+  background:rgba(8,11,15,0.97);
+  border-top:1px solid rgba(255,213,79,0.18);
+  padding:7px 20px;
+  display:flex;align-items:center;gap:14px;
+  z-index:300;
+  backdrop-filter:blur(10px);
+  transition:transform 0.3s cubic-bezier(0.22,1,0.36,1);
+}
+#atl-disclaimer.hidden{transform:translateY(100%);}
+.disc-icon{
+  font-size:11px;color:var(--gold);
+  flex-shrink:0;letter-spacing:0.1em;
+}
+.disc-text{
+  font-size:8.5px;color:var(--muted);
+  line-height:1.55;letter-spacing:0.04em;
+  flex:1;
+}
+.disc-text strong{color:var(--sub);font-weight:600;}
+.disc-text em{color:var(--gold);font-style:normal;}
+.disc-dismiss{
+  flex-shrink:0;
+  background:transparent;border:1px solid var(--border2);
+  color:var(--muted);font-family:var(--font-mono);
+  font-size:8px;letter-spacing:0.1em;text-transform:uppercase;
+  padding:4px 10px;cursor:pointer;
+  transition:all 0.15s;white-space:nowrap;
+}
+.disc-dismiss:hover{border-color:var(--gold);color:var(--gold);}
+@media(max-width:767px){
+  #atl-disclaimer{left:0;bottom:60px;padding:8px 14px;gap:10px;}
+  .disc-text{font-size:8px;}
+}
 </style>
 </head>
 <body>
@@ -1318,6 +1356,21 @@ body{
   <div class="loading-ring"></div>
   <div class="loading-text">FETCHING MARKET DATA</div>
   <div class="loading-sub" id="loading-sub-text">CONNECTING TO BINANCE...</div>
+</div>
+
+<!-- ══ ATL ANALYSIS DISCLAIMER ══ -->
+<div id="atl-disclaimer">
+  <span class="disc-icon">⚠ DISCLAIMER</span>
+  <span class="disc-text">
+    <strong>ATL Market Intelligence Terminal is an analytical research tool, not a financial advisor.</strong>
+    All signals, scores, and trade scenarios are generated algorithmically from public market data and are provided
+    <em>for informational and educational purposes only.</em>
+    They do not constitute investment advice, solicitation, or a recommendation to buy or sell any asset.
+    <strong>Recommended workflow:</strong> use the Scanner to surface candidates, then independently verify each setup on TradingView or your own platform before making any trading decision.
+    This tool is a <em>second opinion — not a first signal.</em>
+    Past signal accuracy does not guarantee future results. Crypto markets carry extreme risk. Never trade with capital you cannot afford to lose.
+  </span>
+  <button class="disc-dismiss" id="disc-dismiss-btn">GOT IT ✕</button>
 </div>
 
 <!-- ══ HEATMAP TOOLTIP ══ -->
@@ -2011,12 +2064,29 @@ async function fetchWithTimeout(url, ms = CFG.TIMEOUT) {
 // ═══════════════════════════════════════════════════════════════
 // FORMATTERS
 // ═══════════════════════════════════════════════════════════════
+// BUG-AUDIT-004 FIX: fmtPrice — consistent, readable precision across all price ranges.
+// Previously: ≥10000 → 1dp comma, ≥1 → 4dp (showed $25000.4500), ≥0.01 → 5dp, else 7dp.
+// Fixed tiers:
+//   ≥100000 → comma, 0dp  (BTC at $100K: $100,000)
+//   ≥10000  → comma, 1dp  (BTC at $65K: $65,234.5)
+//   ≥1000   → comma, 2dp  (ETH at $3.5K: $3,512.45)
+//   ≥100    → 2dp          (LTC at $120: $120.45)
+//   ≥10     → 3dp          (LINK at $15: $15.234)
+//   ≥1      → 4dp          (SOL at $1.8: $1.8234)
+//   ≥0.10   → 5dp          (XRP at $0.60: $0.60000)
+//   ≥0.001  → 6dp          (low-cap: $0.004523)
+//   else    → 8dp          (micro-cap: $0.00002341)
 function fmtPrice(p) {
   if (!p || isNaN(p)) return '—';
-  if (p >= 10000) return p.toLocaleString('en-US',{minimumFractionDigits:1,maximumFractionDigits:1});
-  if (p >= 1)     return p.toFixed(4);
-  if (p >= 0.01)  return p.toFixed(5);
-  return p.toFixed(7);
+  if (p >= 100000) return p.toLocaleString('en-US',{minimumFractionDigits:0,maximumFractionDigits:0});
+  if (p >= 10000)  return p.toLocaleString('en-US',{minimumFractionDigits:1,maximumFractionDigits:1});
+  if (p >= 1000)   return p.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+  if (p >= 100)    return p.toFixed(2);
+  if (p >= 10)     return p.toFixed(3);
+  if (p >= 1)      return p.toFixed(4);
+  if (p >= 0.10)   return p.toFixed(5);
+  if (p >= 0.001)  return p.toFixed(6);
+  return p.toFixed(8);
 }
 function fmtPct(p) {
   if (!p || isNaN(p)) return '—';
@@ -2174,7 +2244,26 @@ function calcSuperTrend(candles, mult = 3.0, period = 14) {
   return { trend, stLine };
 }
 
-function findSwings(candles, lookback = 5) {
+// BUG-AUDIT-005 FIX: Swing lookback must scale with timeframe.
+// Hardcoded lookback=5 works for 5m/15m but is far too tight for 1D/1W candles:
+// on weekly charts a 5-bar "swing high" is just a 5-week local wiggle — not institutional structure.
+// Timeframe-aware defaults:
+//   5m/15m  → 5  bars  (short-range noise tolerance)
+//   1h      → 7  bars  (intraday structure)
+//   4h      → 8  bars  (swing structure)
+//   1d      → 12 bars  (daily swing — needs more context to avoid false BOS)
+//   1w      → 15 bars  (weekly structure — major swing highs/lows only)
+// The tf parameter is optional — callers that don't pass it default to 5 (existing behaviour for scanner/analysis).
+// runAnalysis() passes the current TF; scanner uses the default since it processes multiple TFs internally.
+function findSwings(candles, lookback, tf) {
+  // Resolve lookback: explicit > tf-derived > default 5
+  if (lookback === undefined || lookback === null) {
+    if      (tf === '1w') lookback = 15;
+    else if (tf === '1d') lookback = 12;
+    else if (tf === '4h') lookback = 8;
+    else if (tf === '1h') lookback = 7;
+    else                  lookback = 5; // 5m, 15m, scanner default
+  }
   const n = candles.length;
   const highs = [], lows = [];
   for (let i = lookback; i < n - lookback; i++) {
@@ -2324,7 +2413,7 @@ function detectStructure(candles, highs, lows) {
 // ── STEP 1: BUILD CONTEXT ──────────────────────────────────────
 // Uses past candles to build the full market picture.
 // Returns everything downstream steps need.
-function buildContext(candles, derivs) {
+function buildContext(candles, derivs, tf) {
   const closes  = candles.map(c => c.close);
   const n       = candles.length;
   const price   = closes[n - 1];
@@ -2335,7 +2424,7 @@ function buildContext(candles, derivs) {
   const tqi     = calcTQI(candles, 20, 20, 10);
   const stData  = calcSuperTrend(candles, 3.0, 14);
   const stTrend = stData.trend[n - 1] || 1;
-  const swings  = findSwings(candles, 5);
+  const swings  = findSwings(candles, null, tf);
   const fvgs    = findFVGs(candles);
   const { highs, lows } = swings;
   const srLevels = buildSRLevels(candles, highs, lows, price);
@@ -2475,6 +2564,7 @@ function buildContext(candles, derivs) {
     sweepDetected, liqValidSetup, reasonCode,
     recentBOS_up, recentBOS_down, recentCHOCH_up, recentCHOCH_down,
     marketState, transitionType,   // ← now pre-computed here, no recompute in buildOutput
+    tf,                            // BUG-AUDIT-007: pass tf through for timeframe-aware entry quality
   };
 }
 
@@ -2689,34 +2779,47 @@ function validateSetup(ctx, structureType, setup) {
   return { valid: true, reason: 'SETUP_VALID' };
 }
 
-// ── STEP 5: CALCULATE ENTRY QUALITY ───────────────────────────
-// Formula: position = (price - swingLow) / (swingHigh - swingLow)
-// < 0.40  → EARLY (boost)
-// 0.40–0.75 → MID (neutral)
-// > 0.75  → LATE (strong penalty)
-// Bias-aware: for bull, early=low in range; for bear, early=high in range
+// BUG-AUDIT-007 FIX: EARLY/MID/LATE thresholds must scale with timeframe.
+// Fixed thresholds (pos<0.40 = EARLY, pos>0.75 = LATE) were tuned for 4H.
+// On 1W charts the "early" zone needs to be narrower (weekly swings are massive —
+// 40% into a swing is already committed). On 5m the zone can be wider.
+// Timeframe-adjusted thresholds (earlyMax / lateMin):
+//   5m/15m : 0.42 / 0.72  (slightly wider early zone — noise is higher)
+//   1h     : 0.40 / 0.75  (original default)
+//   4h     : 0.38 / 0.76
+//   1d     : 0.32 / 0.78  (daily swings are large — only low-in-range is truly early)
+//   1w     : 0.28 / 0.80  (weekly structure — very selective)
 function calculateEntryQuality(ctx) {
-  const { swingPos, isBull, isBear, hasFreshPullback, bias } = ctx;
+  const { swingPos, isBull, isBear, hasFreshPullback, bias, tf } = ctx;
   const pos = Math.max(0, Math.min(1, swingPos));
+
+  // Timeframe-aware thresholds
+  let earlyMax, lateMin;
+  if      (tf === '1w') { earlyMax = 0.28; lateMin = 0.80; }
+  else if (tf === '1d') { earlyMax = 0.32; lateMin = 0.78; }
+  else if (tf === '4h') { earlyMax = 0.38; lateMin = 0.76; }
+  else if (tf === '5m' || tf === '15m') { earlyMax = 0.42; lateMin = 0.72; }
+  else                  { earlyMax = 0.40; lateMin = 0.75; } // 1h default
 
   let quality, zone;
 
   if (isBull) {
-    if (pos < 0.40)      { quality = 'EARLY'; zone = 'discount'; }
-    else if (pos > 0.75) { quality = 'LATE';  zone = 'premium'; }
-    else                 { quality = 'MID';   zone = 'equilibrium'; }
+    if (pos < earlyMax)      { quality = 'EARLY'; zone = 'discount'; }
+    else if (pos > lateMin)  { quality = 'LATE';  zone = 'premium'; }
+    else                     { quality = 'MID';   zone = 'equilibrium'; }
   } else if (isBear) {
-    if (pos > 0.60)      { quality = 'EARLY'; zone = 'premium'; }
-    else if (pos < 0.25) { quality = 'LATE';  zone = 'discount'; }
-    else                 { quality = 'MID';   zone = 'equilibrium'; }
+    // Bear: early = high in range (1 - earlyMax), late = low in range (1 - lateMin)
+    if (pos > (1 - earlyMax))      { quality = 'EARLY'; zone = 'premium'; }
+    else if (pos < (1 - lateMin))  { quality = 'LATE';  zone = 'discount'; }
+    else                           { quality = 'MID';   zone = 'equilibrium'; }
   } else {
     // Neutral bias (e.g. range breakout setup, no clear directional lean)
     // BUG-014 FIX: Price at range extremes = EARLY (breakout opportunity).
     // Price at dead centre = no edge → label NEUTRAL, not LATE.
     // LATE should only mean "entry window has passed" — not "price is at midpoint."
-    if (pos < 0.25 || pos > 0.75) { quality = 'EARLY';   zone = 'extreme';    }
-    else if (pos > 0.35 && pos < 0.65) { quality = 'NEUTRAL'; zone = 'dead-centre'; }
-    else                               { quality = 'MID';     zone = 'near-extreme'; }
+    if (pos < (1 - lateMin) || pos > lateMin) { quality = 'EARLY';   zone = 'extreme';    }
+    else if (pos > 0.35 && pos < 0.65)        { quality = 'NEUTRAL'; zone = 'dead-centre'; }
+    else                                       { quality = 'MID';     zone = 'near-extreme'; }
   }
 
   // Multiplier — LATE must be 0.50 (spec: "score * 0.5") to visibly affect ranking
@@ -2989,11 +3092,12 @@ function buildOutput(ctx, structureType, setup, entryQuality, validation, score,
 //
 // For diagnostics the function also stores the last rejection reason
 // on _analyzeCoin_lastRejectReason (module-level, reset per call).
-function analyzeCoin(candles, derivs) {
+function analyzeCoin(candles, derivs, tf) {
   analyzeCoin._lastRejectReason = null; // reset each call
 
   // STEP 1 — Build full context from past candles + derivatives
-  const ctx = buildContext(candles, derivs);
+  // BUG-AUDIT-005 FIX: pass tf so findSwings can use timeframe-aware lookback
+  const ctx = buildContext(candles, derivs, tf);
   // ctx.candles attachment removed — marketState is now pre-computed in buildContext (BUG-012 fix)
 
   // STEP 2 — Classify structure: trend_up / trend_down / range / transition / invalid
@@ -3151,6 +3255,11 @@ async function fetchOIHistory(symbol) {
 }
 
 // Scanner fetchers
+// BUG-AUDIT-009 FIX: Added 429 rate-limit retry with exponential backoff.
+// Previously, a 429 response from Binance caused silent failure (failed++), dropping coins from
+// results with no warning. Under heavy scans (200 coins × 3 calls, concurrency=8) the IP
+// weight limit can be reached. Now: on 429, wait (retryAfter header or 2s default) then retry
+// once. If still 429, return null — the coin is dropped but the scanner keeps running.
 async function fetchScannerCandles(symbol, tf, limit=200) {
   // GAP-003 FIX: Cache key includes exchange identifier so a future exchange-source
   // switch (or a manual Bybit fetch for the same symbol/TF) never serves stale data
@@ -3161,17 +3270,31 @@ async function fetchScannerCandles(symbol, tf, limit=200) {
   const tfMap={'5m':'5m','15m':'15m','1h':'1h','4h':'4h','1d':'1d','1w':'1w'};
   const interval = tfMap[tf]||'1h';
   const url = `${CFG.BINANCE_FAPI}/klines?symbol=${symbol}USDT&interval=${interval}&limit=${limit}`;
-  const ctrl = new AbortController();
-  const id = setTimeout(()=>ctrl.abort(),7000);
-  try {
-    const r = await fetch(url,{signal:ctrl.signal}); clearTimeout(id);
-    if (!r.ok) return null;
-    const d = await r.json();
-    if (!Array.isArray(d)||d.length<50) return null;
-    const result = d.map(k=>({time:+k[0],open:+k[1],high:+k[2],low:+k[3],close:+k[4],vol:+k[5]}));
-    cacheSet(cacheKey, result);
-    return result;
-  } catch(e) { clearTimeout(id); return null; }
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const ctrl = new AbortController();
+    const id = setTimeout(()=>ctrl.abort(), 7000);
+    try {
+      const r = await fetch(url, {signal: ctrl.signal});
+      clearTimeout(id);
+      if (r.status === 429 || r.status === 418) {
+        // 429 = rate limited, 418 = IP banned temporarily by Binance
+        const retryAfterMs = parseInt(r.headers.get('Retry-After') || '2') * 1000;
+        if (attempt === 0) {
+          await new Promise(res => setTimeout(res, Math.min(retryAfterMs, 5000)));
+          continue; // retry once
+        }
+        return null; // second attempt also rate-limited — give up on this coin
+      }
+      if (!r.ok) return null;
+      const d = await r.json();
+      if (!Array.isArray(d)||d.length<50) return null;
+      const result = d.map(k=>({time:+k[0],open:+k[1],high:+k[2],low:+k[3],close:+k[4],vol:+k[5]}));
+      cacheSet(cacheKey, result);
+      return result;
+    } catch(e) { clearTimeout(id); return null; }
+  }
+  return null;
 }
 async function fetchScannerDerivs(symbol) {
   const cacheKey = `derivs:binance_fapi:${symbol}`;
@@ -3405,11 +3528,12 @@ function renderChart(candles, stData, fvgs, swings, srLevels) {
   ctx.fillRect(pad.left, rsiY(70), W-pad.left-pad.right, rsiY(80)-rsiY(70));
   ctx.fillStyle = 'rgba(0,230,118,0.06)';
   ctx.fillRect(pad.left, rsiY(30), W-pad.left-pad.right, rsiY(20)-rsiY(30));
-  // RSI line
+  // RSI line — clamp display range to [5,95] so extreme overbought/oversold readings remain visible
+  // Previously clamped to [20,80] which hid actionable RSI extremes (e.g. RSI=92 looked same as RSI=80)
   ctx.strokeStyle = '#8892a0'; ctx.lineWidth=1;
   ctx.beginPath();
   for (let i=0; i<n; i++) {
-    const v = Math.max(20, Math.min(80, rsiDisplay[i]||50));
+    const v = Math.max(5, Math.min(95, rsiDisplay[i]||50));
     i===0 ? ctx.moveTo(cxm(i),rsiY(v)) : ctx.lineTo(cxm(i),rsiY(v));
   }
   ctx.stroke();
@@ -3421,7 +3545,7 @@ function renderChart(candles, stData, fvgs, swings, srLevels) {
   if (rsiDisplay.length > 0) {
     const lastRsi = rsiDisplay[rsiDisplay.length-1] || 50;
     ctx.fillStyle = lastRsi > 70 ? '#ff4444' : lastRsi < 30 ? '#00e676' : '#8892a0';
-    ctx.fillText(lastRsi.toFixed(0), W-pad.right+3, rsiY(Math.max(20,Math.min(80,lastRsi)))+3);
+    ctx.fillText(lastRsi.toFixed(0), W-pad.right+3, rsiY(Math.max(5,Math.min(95,lastRsi)))+3);
   }
 }
 
@@ -3469,7 +3593,16 @@ function findOrderBlocks(candles, swings) {
 function detectLiquidity(candles, highs, lows) {
   const n = candles.length;
   const currentPrice = candles[n-1].close;
-  const tolerance = currentPrice * 0.003; // 0.3% = equal level
+
+  // BUG-AUDIT-006 FIX: ATR-relative tolerance replaces fixed 0.3% percentage.
+  // Problem: 0.3% on a $0.004 micro-cap = $0.000012 — so tight that near-equal levels are missed.
+  // On BTC at $100K, 0.3% = $300 — reasonable but still ignores the market's actual volatility.
+  // Solution: use 0.25 × ATR(14) as the equality band — this scales with the asset's actual
+  // pip-level noise, is tighter when volatility is low and wider when markets are noisy.
+  // Floor: 0.2% of price (prevents division by zero on micro-caps).
+  const atrArr = calcATR(candles, 14);
+  const atr = atrArr[atrArr.length - 1] || currentPrice * 0.01;
+  const tolerance = Math.max(atr * 0.25, currentPrice * 0.002);
 
   // ── 1. Detect equal highs / equal lows (inducement pools) ──
   const equalHighPairs = [];
@@ -3507,14 +3640,38 @@ function detectLiquidity(candles, highs, lows) {
   const sweepDetected = sweeps.length > 0;
 
   // ── 3. Check for BOS/CHoCH AFTER latest sweep (institutional confirmation) ──
+  // BUG-AUDIT-001 FIX: The previous structAfterSweep was a dead variable — the filter
+  // callback ignored the event object entirely (just checked latestSweepIdx > 0), so
+  // structAfterSweep was identical to struct.events and was never used in validSetup anyway.
+  // Correct SMC logic: the sweep must PRECEDE the structure break.
+  // A BOS that happened before the sweep is stale context, not confirmation.
+  // We enforce this by finding the bar index of each struct event and requiring it to be
+  // strictly after the latestSweepIdx.
+  //
+  // Because detectStructure doesn't store bar indices on events, we approximate via the
+  // swing level: find the swing high/low that matches the event's level within tolerance,
+  // then check its idx. Events with no matching swing are treated as recent (conservative).
   const struct = detectStructure(candles, highs, lows);
-  const latestSweepIdx = sweeps.length > 0 ? Math.max(...sweeps.map(s=>s.idx)) : -1;
-  const structAfterSweep = struct.events.filter(e => {
-    // Match struct event candle index (approximate via price proximity in last 20 bars)
-    return latestSweepIdx > 0; // if sweep happened, any subsequent struct event qualifies
+  const latestSweepIdx = sweeps.length > 0 ? Math.max(...sweeps.map(s => s.idx)) : -1;
+
+  // Build a map of swing price → idx for fast lookup
+  const swingIdxMap = new Map();
+  highs.forEach(h => swingIdxMap.set(h.price, h.idx));
+  lows.forEach(l  => swingIdxMap.set(l.price, l.idx));
+
+  const bosAfterSweep = struct.events.some(e => {
+    // Find the matching swing index for this event's level
+    const matchingIdx = [...swingIdxMap.entries()].find(
+      ([price]) => Math.abs(price - e.level) < tolerance * 3
+    )?.[1];
+    // If we can't find the swing, assume it's after the sweep (conservative — don't over-reject)
+    const eventIdx = matchingIdx !== undefined ? matchingIdx : latestSweepIdx + 1;
+    return eventIdx > latestSweepIdx;
   });
 
-  const validSetup = sweepDetected && (struct.recentBOS_up || struct.recentBOS_down || struct.recentCHOCH_up || struct.recentCHOCH_down);
+  // validSetup requires: sweep detected AND (BOS/CHoCH that occurred AFTER the sweep)
+  const validSetup = sweepDetected && bosAfterSweep &&
+    (struct.recentBOS_up || struct.recentBOS_down || struct.recentCHOCH_up || struct.recentCHOCH_down);
 
   // ── 4. Setup quality bonus ──
   let setupQuality = 0;
@@ -3796,7 +3953,7 @@ function updateMultiTF(multiTFCandles, currentTF) {
     const st=calcSuperTrend(candles);
     const nc=candles.length;
     const trend=st.trend[nc-1];
-    const sw=findSwings(candles);
+    const sw=findSwings(candles, null, tf);
     const struct=detectStructure(candles,sw.highs,sw.lows);
     const lastClose=candles[nc-1].close;
     const lastSH=sw.highs.length>0?sw.highs[sw.highs.length-1].price:null;
@@ -3997,8 +4154,12 @@ function updateTradeIdeas(data) {
     },
     {
       label:'Funding Edge',
-      // Positive funding = longs paying = bearish edge for shorts; negative = bullish edge for longs
-      pass: isLong ? (funding < -0.01) : (funding > 0.02)
+      // BUG-AUDIT-008 FIX: Symmetric thresholds at ±0.03% (per 8-hour period).
+      // Previous thresholds: long needed funding < -0.01%, short needed > +0.02% — asymmetric
+      // and far too sensitive (0.01% is market noise, not a real positioning edge).
+      // 0.03% per 8h = 0.09% daily = ~33% annualised — a genuinely elevated rate that
+      // reflects meaningful crowding on one side. Below this threshold, funding is neutral.
+      pass: isLong ? (funding < -0.03) : (funding > 0.03)
     },
     {
       label:'L/S Position',
@@ -4233,17 +4394,20 @@ function generateTradeIdeas(candles, stData, swings, fvgs, srLevels, rsi, er, tq
   //       → price already reached extended target
   //
   const longValid =
-    currentPrice > longSL   &&   // not stopped out
+    currentPrice > longSL   &&   // not stopped out (price above stop)
     currentPrice < longTP2;      // full target not yet hit (riding toward TP2 between TP1-TP2 is still valid)
 
-  // SHORT validity — two separate scenarios:
-  // (1) Entry triggered (price once rallied to entry, now riding down): currentPrice < shortEntry and not stopped out
-  // (2) Entry NOT triggered but price is already below TP1: opportunity passed, trade never started
-  // We detect case (2) as: shortEntry > currentPrice AND currentPrice < shortTP1
-  //   → price never reached entry (entry still above) but already blew past TP1 going down = dead trade
+  // BUG-AUDIT-002 CLARIFICATION: shortValid condition analysis.
+  // shortSL is ALWAYS above shortEntry (= Math.max(effectiveSH + atr*0.5, shortEntry + atr)).
+  // shortEntry is ALWAYS above currentPrice (clamped: if shortEntry < currentPrice → shortEntry = currentPrice + atr*0.5).
+  // So the geometric chain is: shortTP2 < shortTP1 < currentPrice < shortEntry < shortSL
+  // "currentPrice < shortSL" = price has not yet rallied above the stop — this is correct for
+  // detecting a stopped-out short (when price rises above shortSL).
+  // The previous comment said "not stopped out going up" — correct intent, the comparison is
+  // also correct given the geometry. The condition is sound; the old confusion was in the comment.
   const shortValid =
-    currentPrice < shortSL  &&   // not stopped out going up
-    currentPrice > shortTP2 &&   // full target not yet hit going down
+    currentPrice < shortSL  &&   // price has not risen above stop loss (short not stopped out)
+    currentPrice > shortTP2 &&   // full downside target not yet reached
     !(shortEntry > currentPrice && currentPrice < shortTP1); // reject: entry untriggered + price already past TP1
 
   const tqiTxt   = tqi>0.65?'HIGH TQI — strong directional flow':tqi>0.35?'MODERATE TQI — mixed momentum':'LOW TQI — choppy, no clear trend';
@@ -4371,7 +4535,7 @@ async function runAnalysis() {
     const closes = c.map(cc=>cc.close);
     const currentPrice = closes[n-1];
     const stData = calcSuperTrend(c);
-    const swings = findSwings(c, 5);
+    const swings = findSwings(c, null, tf);
     const fvgs   = findFVGs(c);
     const srLevels = buildSRLevels(c, swings.highs, swings.lows, currentPrice);
     const er  = calcER(closes, 20);
@@ -4663,7 +4827,7 @@ async function runMarketScan() {
         // null → skip immediately. DO NOT score. DO NOT rank.
         // DO NOT show in ranked list or heatmap.
         // ═══════════════════════════════════════════════════════
-        const result = analyzeCoin(candles, derivs);
+        const result = analyzeCoin(candles, derivs, tf);
 
         // HARD GATE — null means the pipeline rejected this coin
         if (result === null) {
@@ -5457,6 +5621,22 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.hm-tab').forEach(tab => {
     tab.addEventListener('click', () => renderHelpModal(tab.dataset.hmtab));
   });
+
+  // Disclaimer dismiss
+  const discBtn = document.getElementById('disc-dismiss-btn');
+  const discBar = document.getElementById('atl-disclaimer');
+  if (discBtn && discBar) {
+    discBtn.addEventListener('click', () => {
+      discBar.classList.add('hidden');
+      try { sessionStorage.setItem('atl_disc_dismissed', '1'); } catch(e) {}
+    });
+    // Re-show if not dismissed in this session
+    try {
+      if (sessionStorage.getItem('atl_disc_dismissed') === '1') {
+        discBar.classList.add('hidden');
+      }
+    } catch(e) {}
+  }
 });
 
 </script>
