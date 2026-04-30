@@ -2763,11 +2763,12 @@ async function fetchBinanceOI(symbol) {
   catch(e) { return null; }
 }
 async function fetchBinanceLSRatio(symbol) {
-  try { const r = await fetchWithTimeout(`${CFG.BINANCE_FAPI}/globalLongShortAccountRatio?symbol=${symbol}USDT&period=5m&limit=1`); const d = await r.json(); return Array.isArray(d) && d.length ? d[0] : null; }
+  // CORS FIX: Correct path is /futures/data/ — /fapi/v1/ L/S endpoints are 404 + CORS-blocked from browser
+  try { const r = await fetchWithTimeout(`https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol=${symbol}USDT&period=5m&limit=1`); if (!r.ok) return null; const d = await r.json(); return Array.isArray(d) && d.length ? d[0] : null; }
   catch(e) { return null; }
 }
 async function fetchBinanceLSTop(symbol) {
-  try { const r = await fetchWithTimeout(`${CFG.BINANCE_FAPI}/topLongShortPositionRatio?symbol=${symbol}USDT&period=5m&limit=1`); const d = await r.json(); return Array.isArray(d) && d.length ? d[0] : null; }
+  try { const r = await fetchWithTimeout(`https://fapi.binance.com/futures/data/topLongShortPositionRatio?symbol=${symbol}USDT&period=5m&limit=1`); if (!r.ok) return null; const d = await r.json(); return Array.isArray(d) && d.length ? d[0] : null; }
   catch(e) { return null; }
 }
 async function fetchBybitTicker(symbol) {
@@ -2859,7 +2860,7 @@ async function fetchScannerDerivs(symbol) {
     const [fr,oi,ls] = await Promise.allSettled([
       fetchWithTimeout(`${CFG.BINANCE_FAPI}/premiumIndex?symbol=${symbol}USDT`).then(r=>r.ok?r.json():null).catch(()=>null),
       fetchWithTimeout(`${CFG.BINANCE_FAPI}/openInterest?symbol=${symbol}USDT`).then(r=>r.ok?r.json():null).catch(()=>null),
-      fetchWithTimeout(`${CFG.BINANCE_FAPI}/globalLongShortAccountRatio?symbol=${symbol}USDT&period=5m&limit=1`).then(r=>r.ok?r.json():null).catch(()=>null),
+      fetchWithTimeout(`https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol=${symbol}USDT&period=5m&limit=1`).then(r=>r.ok?r.json():null).catch(()=>null),
     ]);
     const frData = fr.status==='fulfilled'?fr.value:null;
     const oiData = oi.status==='fulfilled'?oi.value:null;
@@ -3497,7 +3498,10 @@ function updateSRLevels(srLevels) {
 }
 
 function updateTradeIdeas(data) {
-  const { primaryDir, confPips, bullPct, weightedScore, confidenceLabel, primaryLevels:pl, primaryNarr, counterTxt, counterLevels:cl, counterNarr, tradeRejected, tradeDecisionReason } = data;
+  const { primaryDir, confPips, bullPct, weightedScore, confidenceLabel,
+    primaryLevels:pl, primaryNarr, counterTxt, counterLevels:cl, counterNarr,
+    tradeRejected, tradeDecisionReason,
+    lastTrend, inDiscount, inPremium, struct, rsi, tqi, lsRatio, funding } = data;
   const isLong = primaryDir === 'LONG';
   const bearPct = 100-bullPct;
   const confColor = UI.confidenceColor(weightedScore);
@@ -3807,7 +3811,14 @@ function generateTradeIdeas(candles, stData, swings, fvgs, srLevels, rsi, er, tq
     ? `Counter-trend SHORT (confidence ${100-weightedScore}% — Low). Valid only on ${inPremium?'rejection candle from premium zone':'CHoCH confirmation on lower TF'}. Entry ${fmtPrice(shortEntry)} (${shortEntryReason}), SL ${fmtPrice(shortSL)}, TP1 ${fmtPrice(shortTP1)}.`
     : `Counter-trend LONG (confidence ${weightedScore}% — Low). Valid only on ${inDiscount?'strong demand reaction at discount zone':'BOS confirmation on lower TF'}. Entry ${fmtPrice(longEntry)} (${longEntryReason}), SL ${fmtPrice(longSL)}, TP1 ${fmtPrice(longTP1)}.`;
 
-  return {primaryDir,confPips,bullPct,weightedScore,confidenceLabel,primaryLevels,primaryNarr,counterTxt,counterLevels,counterNarr,atr,longEntryReason,shortEntryReason,tradeRejected,tradeDecisionReason:_tradeDecision.reason};
+  return {
+    primaryDir, confPips, bullPct, weightedScore, confidenceLabel,
+    primaryLevels, primaryNarr, counterTxt, counterLevels, counterNarr,
+    atr, longEntryReason, shortEntryReason,
+    tradeRejected, tradeDecisionReason: _tradeDecision.reason,
+    // SMC checklist fields — needed by updateTradeIdeas BUG-015 fix
+    lastTrend, inDiscount, inPremium, struct, rsi, tqi, lsRatio, funding,
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════
