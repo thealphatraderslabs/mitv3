@@ -1941,59 +1941,6 @@ function detectStructure(candles, highs, lows) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ENHANCED detectMarketState — returns transitionType
-// ═══════════════════════════════════════════════════════════════
-function detectMarketState(candles, swings, tqi, er, stTrend) {
-  const { highs, lows } = swings;
-  const atrFull = calcATR(candles, 14);
-  const atrRecent = atrFull.slice(-10).filter(Boolean);
-  const atrOld    = atrFull.slice(-30,-10).filter(Boolean);
-  const avgAtrRecent = atrRecent.reduce((a,b)=>a+b,0)/Math.max(atrRecent.length,1);
-  const avgAtrOld    = atrOld.reduce((a,b)=>a+b,0)/Math.max(atrOld.length,1);
-  const atrExpanding   = avgAtrRecent > avgAtrOld * 1.2;
-
-  let hhCount=0, hlCount=0, llCount=0, lhCount=0;
-  for (let i=1; i<Math.min(highs.length,4); i++) {
-    if (highs[i].price > highs[i-1].price) hhCount++; else lhCount++;
-  }
-  for (let i=1; i<Math.min(lows.length,4); i++) {
-    if (lows[i].price > lows[i-1].price) hlCount++; else llCount++;
-  }
-  const trendingUp   = hhCount >= 1 && hlCount >= 1;
-  const trendingDown = llCount >= 1 && lhCount >= 1;
-
-  const struct = detectStructure(candles, highs, lows);
-  const { recentBOS_up, recentBOS_down, recentCHOCH_up, recentCHOCH_down } = struct;
-  const hasBOS = recentBOS_up || recentBOS_down || recentCHOCH_up || recentCHOCH_down;
-
-  let marketState = 'RANGE';
-  let transitionType = 'neutral';
-
-  if (atrExpanding && (trendingUp || trendingDown)) {
-    marketState = 'EXPANSION';
-    transitionType = trendingUp ? 'bullish_continuation' : 'bearish_continuation';
-  } else if (trendingUp || trendingDown) {
-    if (er > 0.4 || tqi > 0.55) {
-      marketState = 'TREND';
-      transitionType = trendingUp ? 'bullish_continuation' : 'bearish_continuation';
-    }
-  }
-
-  if (marketState === 'RANGE' || (hasBOS && marketState !== 'EXPANSION')) {
-    if (recentBOS_down) { marketState = 'TRANSITION'; transitionType = 'bearish_continuation'; }
-    else if (recentBOS_up) { marketState = 'TRANSITION'; transitionType = 'bullish_continuation'; }
-    else if (recentCHOCH_up) { marketState = 'TRANSITION'; transitionType = 'bullish_reversal'; }
-    else if (recentCHOCH_down) { marketState = 'TRANSITION'; transitionType = 'bearish_reversal'; }
-    else if ((trendingUp && llCount > 0) || (trendingDown && hhCount > 0)) {
-      marketState = 'TRANSITION';
-      transitionType = trendingUp ? 'bearish_continuation' : 'bullish_continuation';
-    }
-  }
-
-  return { marketState, transitionType };
-}
-
-// ═══════════════════════════════════════════════════════════════
 // CONTEXT-AWARE DECISION ENGINE — MANDATORY 7-STEP PIPELINE
 // Pipeline: buildContext → detectStructureType → detectSetup →
 //           validateSetup → calculateEntryQuality →
@@ -2050,8 +1997,8 @@ function buildContext(candles, derivs) {
   for (let i = 1; i < Math.min(lows.length, 4); i++) {
     if (lows[i].price > lows[i-1].price) hlCount++; else llCount++;
   }
-  const trendingUp   = hhCount >= 1 && hlCount >= 1;
-  const trendingDown = llCount >= 1 && lhCount >= 1;
+  const trendingUp   = hhCount >= 2 && hlCount >= 2; // SCAN-001 FIX: require 2 HH+HL — prevents single-bounce noise passing as trend
+  const trendingDown = llCount >= 2 && lhCount >= 2; // SCAN-001 FIX: require 2 LL+LH — prevents single-drop noise passing as downtrend
   const trendStrength = tqi > 0.65 ? 'strong' : tqi > 0.35 ? 'moderate' : 'weak';
 
   // Compression detection
@@ -2182,24 +2129,16 @@ function detectStructureType(ctx) {
   const hasCHoCH= recentCHOCH_up || recentCHOCH_down;
 
   // Strong directional move = TREND (directional subtype preserved)
-  // Threshold: ER > 0.35 OR TQI > 0.45 (was 0.40/0.50 — loosened to catch more real trends)
-  if (trendingUp && (er > 0.35 || tqi > 0.45) && !isExpanding) {
+  // SCAN-002 FIX: removed !isExpanding guard — expansion+trend was handled identically
+  // in the second block anyway, making the guard redundant. Merged into one check.
+  // Threshold: ER > 0.35 OR TQI > 0.45
+  if (trendingUp && (er > 0.35 || tqi > 0.45 || isExpanding)) {
     return { type: 'trend_up', valid: true,
-      detail: 'Bullish HH/HL sequence' };
+      detail: isExpanding ? 'Expansion — ATR expanding into bullish trend' : 'Bullish HH/HL sequence' };
   }
-  if (trendingDown && (er > 0.35 || tqi > 0.45) && !isExpanding) {
+  if (trendingDown && (er > 0.35 || tqi > 0.45 || isExpanding)) {
     return { type: 'trend_down', valid: true,
-      detail: 'Bearish LL/LH sequence' };
-  }
-
-  // Volatility expansion with directional structure = EXPANSION (subtype of trend, directional)
-  if (isExpanding && trendingUp) {
-    return { type: 'trend_up', valid: true,
-      detail: 'Expansion — ATR expanding into bullish trend' };
-  }
-  if (isExpanding && trendingDown) {
-    return { type: 'trend_down', valid: true,
-      detail: 'Expansion — ATR expanding into bearish trend' };
+      detail: isExpanding ? 'Expansion — ATR expanding into bearish trend' : 'Bearish LL/LH sequence' };
   }
 
   // BOS/CHoCH without full expansion = TRANSITION
@@ -2265,14 +2204,20 @@ function detectSetup(ctx, structureType) {
   }
 
   // Range + expansion = breakout
+  // SCAN-004 FIX: use SuperTrend bias for direction instead of 'neutral' — this ensures
+  // contra-trend gates in validateSetup (rules 2/3) apply to breakout setups too.
+  // A breakout in a range still follows the dominant trend direction; 'neutral' bypassed
+  // ALL directional conflict checks and the premium/discount exceptions (rules 6/7).
   if (st === 'range' && isExpanding) {
-    return { type: 'breakout', direction: 'neutral', valid: true,
+    const brkDir = isBull ? 'long' : isBear ? 'short' : 'neutral';
+    return { type: 'breakout', direction: brkDir, valid: true,
       detail: 'Range with expanding ATR — breakout setup' };
   }
 
   // Range with high compression building = pre-breakout
   if (st === 'range' && compressionScore > 55) {
-    return { type: 'breakout', direction: 'neutral', valid: true,
+    const brkDir = isBull ? 'long' : isBear ? 'short' : 'neutral';
+    return { type: 'breakout', direction: brkDir, valid: true,
       detail: 'High compression in range — imminent breakout potential' };
   }
 
@@ -2433,7 +2378,10 @@ function calculateScore(ctx, structureType, setup, entryQuality, validation) {
   // -- Structure + SMC score (40% weight) --
   let structScore = 0;
   structScore += Math.min(nearLevels.length * 12, 36);
-  const pct = ctx.swingPos;
+  // SCAN-008 FIX: clamp swingPos to [0,1] here — buildContext doesn't clamp it, so a
+  // breakout above lastSH gives swingPos > 1.0, which would incorrectly trigger atEdge
+  // (pct > 0.75 for neutral) and award an undeserved structural edge bonus.
+  const pct = Math.max(0, Math.min(1, ctx.swingPos));
   const atEdge = (isBull && pct < 0.35) || (isBear && pct > 0.65) ||
     (!isBull && !isBear && (pct < 0.25 || pct > 0.75));
   if (atEdge) structScore += 25;
@@ -2465,8 +2413,10 @@ function calculateScore(ctx, structureType, setup, entryQuality, validation) {
   liqScore = Math.min(100, liqScore);
 
   // -- Base score --
-  // Weights: Structure+SMC 45% | Compression 25% | Trend 25% | Liq confirm 5%
-  // (liqScore here = liquidity/SMC confirmation score, not raw derivatives)
+  // SCAN-006 FIX: clarified comment — liqScore is the SMC/liquidity structure score
+  // (equal highs/lows, sweeps, FVGs). Derivatives are a completely separate variable
+  // applied below via derivImpact — they are NOT part of this base formula.
+  // Weights: Structure+SMC 45% | Compression 25% | Trend 25% | Liq/SMC structure 5%
   let base = 0.45 * structScore + 0.25 * compressionScore + 0.25 * trendScore + 0.05 * liqScore;
 
   // Bias alignment multiplier
@@ -2510,13 +2460,14 @@ function calculateScore(ctx, structureType, setup, entryQuality, validation) {
 
   // DEAD-003 FIX: Return score components so buildOutput can expose them on the
   // result object — enables per-component score display on coin cards.
+  // SCAN-003 FIX: removed ×100 multiplication — scores are already 0-100 after Math.min(100,…)
   const finalScore = Math.min(100, Math.max(0, Math.round(base + derivImpact)));
   return {
     score: finalScore,
-    structScore:      Math.round(structScore      * 100),
-    trendScore:       Math.round(trendScore       * 100),
-    compressionScore: Math.round(compressionScore * 100),
-    liqScore:         Math.round(liqScore         * 100),
+    structScore:      Math.round(structScore),
+    trendScore:       Math.round(trendScore),
+    compressionScore: Math.round(compressionScore),
+    liqScore:         Math.round(liqScore),
   };
 }
 
@@ -2859,18 +2810,23 @@ async function fetchScannerDerivs(symbol) {
   if (cached) return cached;
   try {
     const [fr,oi,ls] = await Promise.allSettled([
-      fetchWithTimeout(`${CFG.BINANCE_FAPI}/premiumIndex?symbol=${symbol}USDT`).then(r=>r.ok?r.json():null).catch(()=>null),
+      // SCAN-007 FIX: use fundingRate?limit=1 not premiumIndex.
+      // premiumIndex.lastFundingRate is the PREVIOUS settled rate (stale).
+      // fundingRate?limit=1 returns the most recent settled funding rate (current).
+      fetchWithTimeout(`${CFG.BINANCE_FAPI}/fundingRate?symbol=${symbol}USDT&limit=1`).then(r=>r.ok?r.json():null).catch(()=>null),
       fetchWithTimeout(`${CFG.BINANCE_FAPI}/openInterest?symbol=${symbol}USDT`).then(r=>r.ok?r.json():null).catch(()=>null),
       fetchWithTimeout(`https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol=${symbol}USDT&period=5m&limit=1`).then(r=>r.ok?r.json():null).catch(()=>null),
     ]);
     const frData = fr.status==='fulfilled'?fr.value:null;
     const oiData = oi.status==='fulfilled'?oi.value:null;
     const lsData = ls.status==='fulfilled'?(Array.isArray(ls.value)?ls.value[0]:null):null;
+    // fundingRate endpoint returns array — take the first (most recent) entry
+    const frEntry = Array.isArray(frData) && frData.length ? frData[0] : null;
     const result = {
-      funding: frData ? parseFloat(frData.lastFundingRate||0)*100 : 0,
-      oi:      oiData ? parseFloat(oiData.openInterest||0) : 0,
-      oiVal:   oiData ? parseFloat(oiData.openInterest||0)*(frData?parseFloat(frData.markPrice||1):1) : 0,
-      lsRatio: lsData ? parseFloat(lsData.longShortRatio||1) : 1,
+      funding: frEntry ? parseFloat(frEntry.fundingRate||0)*100 : 0,
+      oi:      oiData  ? parseFloat(oiData.openInterest||0) : 0,
+      oiVal:   oiData  ? parseFloat(oiData.openInterest||0)*(frEntry?parseFloat(frEntry.markPrice||1):1) : 0,
+      lsRatio: lsData  ? parseFloat(lsData.longShortRatio||1) : 1,
     };
     cacheSet(cacheKey, result);
     return result;
@@ -2897,8 +2853,14 @@ async function fetchAllTickersFromBinance() {
   const map={};
   for (const t of data) {
     const sym = t.symbol.replace('USDT','');
-    // quoteVolume = 24h USDT turnover — best available market-cap proxy from Binance ticker
-    map[sym] = { vol: parseFloat(t.quoteVolume||0), quoteVol: parseFloat(t.quoteVolume||0), price: parseFloat(t.lastPrice||0) };
+    // SCAN-005 FIX: keep vol (base volume, coin units) and quoteVol (USDT turnover) separate.
+    // vol  = base volume  — used for result.vol display on coin cards (coin units, e.g. 1.2K BTC)
+    // quoteVol = USDT turnover — used for $1M liquidity filter and market-cap ranking proxy
+    map[sym] = {
+      vol:      parseFloat(t.volume||0),       // base volume in coin units
+      quoteVol: parseFloat(t.quoteVolume||0),  // USDT turnover — filter + ranking
+      price:    parseFloat(t.lastPrice||0)
+    };
   }
   return map;
 }
@@ -4267,9 +4229,10 @@ async function runMarketScan() {
     if (_scanCancelled) return;
 
     const rawCount = allPairs.length;
-    const MIN_VOL  = 1_000_000;
-    const noVolPairs = allPairs.filter(s => !tickers[s]||tickers[s].vol<MIN_VOL);
-    const afterVol   = allPairs.filter(s =>  tickers[s]&&tickers[s].vol>=MIN_VOL);
+    const MIN_VOL  = 1_000_000; // $1M USDT 24h turnover minimum
+    // SCAN-005 FIX: filter on quoteVol (USDT turnover) — vol is now base units (coin count)
+    const noVolPairs = allPairs.filter(s => !tickers[s] || (tickers[s].quoteVol||0) < MIN_VOL);
+    const afterVol   = allPairs.filter(s =>  tickers[s] && (tickers[s].quoteVol||0) >= MIN_VOL);
     let afterBias=[...afterVol], biasRemoved=0, biasNames='';
     if (bias!=='all') {
       const topN = bias==='exclude10' ? 10 : 20;
