@@ -3502,10 +3502,30 @@ function updateTradeIdeas(data) {
   const { primaryDir, confPips, bullPct, weightedScore, confidenceLabel,
     primaryLevels:pl, primaryNarr, counterTxt, counterLevels:cl, counterNarr,
     tradeRejected, tradeDecisionReason,
+    longValid, shortValid,
     lastTrend, inDiscount, inPremium, struct, rsi, tqi, lsRatio, funding } = data;
   const isLong = primaryDir === 'LONG';
   const bearPct = 100-bullPct;
   const confColor = UI.confidenceColor(weightedScore);
+
+  // BUG-STALE-001 helper: renders a "played out" notice in place of a stale card
+  function staleCard(dir, levels, reason) {
+    const isL = dir === 'LONG';
+    return `
+      <div class="trade-card" style="border-color:rgba(255,165,0,0.3);background:rgba(255,165,0,0.04)">
+        <div class="trade-dir" style="color:var(--gold)">
+          ${isL?'▲':'▼'} ${dir} — SCENARIO PLAYED OUT
+        </div>
+        <div style="font-size:9px;color:var(--sub);line-height:1.7;letter-spacing:0.04em;padding:6px 0">
+          <span style="color:var(--gold);font-weight:600">⚠ Stale setup detected.</span>
+          The ${dir} scenario generated from the previous swing (Entry ${fmtPrice(levels.entry)} /
+          TP1 ${fmtPrice(levels.tp1)} / TP2 ${fmtPrice(levels.tp2)}) has already been reached
+          or bypassed by price action. This trade is no longer actionable.<br><br>
+          <span style="color:var(--muted)">Reason: ${reason}.<br>
+          Wait for price to form a new swing structure and re-run analysis.</span>
+        </div>
+      </div>`;
+  }
 
   // ── HARD RULE: Rejected setups MUST NOT show trade levels ──
   // Showing entry/SL/TP on a rejected setup creates false confidence.
@@ -3551,7 +3571,16 @@ function updateTradeIdeas(data) {
         &nbsp;·&nbsp;Structure 40% · Location 25% · Momentum 30% · Derivatives 5%
       </div>
     </div>`;
-  const primaryCard = `
+  // BUG-STALE-001: determine staleness reason string for user-facing notice
+  const primaryValid = isLong ? longValid : shortValid;
+  const primaryStaleReason = isLong
+    ? (!longValid && pl.entry >= data.currentPrice ? 'Entry above current price — long entry missed on breakout'
+      : !longValid && pl.tp1  <= data.currentPrice ? 'TP1 already hit — target reached'
+      : 'Entry more than 4× ATR from current price — setup too distant')
+    : (!shortValid && pl.entry <= data.currentPrice ? 'Entry below current price — short entry missed on breakdown'
+      : !shortValid && pl.tp1  >= data.currentPrice ? 'TP1 already hit — target reached'
+      : 'Entry more than 4× ATR from current price — setup too distant');
+  const primaryCard = primaryValid ? `
     <div class="trade-card ${isLong?'long':'short'}">
       <div class="trade-dir ${isLong?'long':'short'}">
         ${isLong?'▲':'▼'} PRIMARY: ${primaryDir}
@@ -3568,9 +3597,15 @@ function updateTradeIdeas(data) {
         <div class="trade-level"><div class="tl-label">RISK · REWARD</div><div style="font-size:11px;font-weight:600;color:var(--gold)">${pl.rr}R <span style="font-size:8px;color:var(--muted)">RISK ${fmtPrice(Math.abs(pl.entry-pl.sl))}</span></div></div>
       </div>
       <div class="trade-narrative">${primaryNarr}</div>
-    </div>`;
+    </div>`
+    : staleCard(primaryDir, pl, primaryStaleReason);
+
   const isCounterLong = counterTxt==='LONG';
-  const counterCard = `
+  const counterValid = isCounterLong ? longValid : shortValid;
+  const counterStaleReason = isCounterLong
+    ? 'Counter-trend long entry or targets no longer valid at current price'
+    : 'Counter-trend short entry or targets no longer valid at current price';
+  const counterCard = counterValid ? `
     <div class="trade-card counter">
       <div class="trade-dir counter">
         ${isCounterLong?'▲':'▼'} COUNTER: ${counterTxt}
@@ -3583,7 +3618,8 @@ function updateTradeIdeas(data) {
         <div class="trade-level"><div class="tl-label">TP2</div><div class="tl-val tp" style="font-size:9px">${fmtPrice(cl.tp2)}</div></div>
       </div>
       <div class="trade-narrative" style="font-size:8px">${counterNarr}</div>
-    </div>`;
+    </div>`
+    : staleCard(counterTxt, cl, counterStaleReason);
   const atrRow=`<div class="rr-row"><div class="rr-item">ATR(14) <span>${fmtPrice(data.atr)}</span></div><div class="rr-item">1× ATR <span>${fmtPrice(data.atr)}</span></div><div class="rr-item">2× ATR <span>${fmtPrice(data.atr*2)}</span></div></div>`;
   const smcBull = bullPct >= 50;
   // BUG-015 FIX: SMC checklist now reads actual computed variables,
@@ -3822,6 +3858,26 @@ function generateTradeIdeas(candles, stData, swings, fvgs, srLevels, rsi, er, tq
   const shortRisk  = shortSL - shortEntry;
   const shortRR    = shortRisk > 0 ? ((shortEntry - shortTP2) / shortRisk).toFixed(2) : 'N/A';
 
+  // BUG-STALE-001 FIX: Validate each trade scenario is still actionable at current price.
+  // On higher timeframes (1W/1D) swing highs/lows are weeks old — entry and TP levels
+  // may have already been hit and long since passed. Detect three staleness conditions:
+  //   (A) Entry already missed: price moved THROUGH the entry zone in the trade direction
+  //       without being captured — e.g. SHORT entry at 97k but price is now at 76k
+  //       (price already dropped past where you would have entered).
+  //   (B) TP1 already hit: price has already traded at or through the first target,
+  //       meaning the scenario played out and is no longer a live opportunity.
+  //   (C) Entry impossibly distant: entry is more than 4× ATR away — not a live setup,
+  //       just a theoretical level with no near-term trigger.
+  // When stale, the card is replaced with an explicit "SCENARIO PLAYED OUT" notice.
+  const longValid =
+    longEntry  < currentPrice &&          // (A) entry still below current price — can still pull back to it
+    longTP1    > currentPrice &&          // (B) TP1 still above current price — not yet hit
+    (currentPrice - longEntry) < atr * 4; // (C) entry not impossibly far below
+  const shortValid =
+    shortEntry > currentPrice &&          // (A) entry still above current price — can still rally to it
+    shortTP1   < currentPrice &&          // (B) TP1 still below current price — not yet hit
+    (shortEntry - currentPrice) < atr * 4;// (C) entry not impossibly far above
+
   const tqiTxt   = tqi>0.65?'HIGH TQI — strong directional flow':tqi>0.35?'MODERATE TQI — mixed momentum':'LOW TQI — choppy, no clear trend';
   const zoneTxt  = inPremium?'PREMIUM zone':inDiscount?'DISCOUNT zone':'EQUILIBRIUM area';
   const _noBOS = !struct.events || struct.events.length === 0;
@@ -3853,8 +3909,10 @@ function generateTradeIdeas(candles, stData, swings, fvgs, srLevels, rsi, er, tq
   return {
     primaryDir, confPips, bullPct, weightedScore, confidenceLabel,
     primaryLevels, primaryNarr, counterTxt, counterLevels, counterNarr,
-    atr, longEntryReason, shortEntryReason,
+    atr, longEntryReason, shortEntryReason, currentPrice,
     tradeRejected, tradeDecisionReason: _tradeDecision.reason,
+    // BUG-STALE-001: validity flags — false means that scenario has already played out
+    longValid, shortValid,
     // SMC checklist fields — needed by updateTradeIdeas BUG-015 fix
     lastTrend, inDiscount, inPremium, struct, rsi, tqi, lsRatio, funding,
   };
