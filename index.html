@@ -588,6 +588,163 @@ body{
   padding-top:6px;border-top:1px solid var(--border);
 }
 
+/* ════════════════════════════════════
+   LEGEND & HELP SYSTEM
+════════════════════════════════════ */
+
+/* ── Heatmap Guide Strip ── */
+#heatmap-guide{
+  background:var(--bg3);
+  border-bottom:1px solid var(--border);
+  overflow:hidden;
+  transition:max-height 0.3s cubic-bezier(0.22,1,0.36,1);
+  max-height:0;
+}
+#heatmap-guide.open{ max-height:320px; }
+.hg-inner{
+  padding:14px 16px 16px;
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+  gap:12px 20px;
+}
+.hg-group-title{
+  grid-column:1/-1;
+  font-family:var(--font-head);font-size:9px;font-weight:700;
+  color:var(--green);letter-spacing:0.18em;text-transform:uppercase;
+  padding-bottom:6px;border-bottom:1px solid var(--border);
+  margin-bottom:2px;
+}
+.hg-item{display:flex;align-items:flex-start;gap:8px;}
+.hg-swatch{
+  flex-shrink:0;width:12px;height:12px;margin-top:2px;border-radius:2px;
+}
+.hg-text{}
+.hg-label{font-size:9px;font-weight:600;color:var(--text);letter-spacing:0.06em;}
+.hg-desc{font-size:8px;color:var(--sub);line-height:1.5;margin-top:1px;}
+
+/* Guide toggle button (sits in ctrl bar) */
+.guide-toggle-btn{
+  display:flex;align-items:center;gap:5px;
+  padding:3px 9px;
+  background:transparent;
+  border:1px solid var(--border2);
+  color:var(--muted);
+  font-family:var(--font-mono);font-size:8px;
+  letter-spacing:0.1em;text-transform:uppercase;
+  cursor:pointer;transition:all 0.15s;margin-left:auto;
+  flex-shrink:0;
+}
+.guide-toggle-btn:hover{border-color:var(--blue);color:var(--blue);}
+.guide-toggle-btn.active{border-color:rgba(64,196,255,0.4);color:var(--blue);background:var(--blue-dim);}
+
+/* ── Panel Help Popovers ── */
+.panel-help-btn{
+  width:16px;height:16px;border-radius:50%;
+  background:var(--bg4);border:1px solid var(--border2);
+  color:var(--muted);font-size:8px;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;transition:all 0.15s;flex-shrink:0;
+  font-family:var(--font-mono);font-weight:700;
+  line-height:1;
+}
+.panel-help-btn:hover{border-color:var(--blue);color:var(--blue);}
+.panel-help-btn.active{background:var(--blue-dim);border-color:rgba(64,196,255,0.4);color:var(--blue);}
+.panel-popover{
+  display:none;
+  background:var(--bg3);
+  border:1px solid var(--border2);
+  border-top:2px solid var(--blue);
+  padding:12px 14px;
+  font-size:9px;color:var(--sub);line-height:1.65;
+}
+.panel-popover.open{display:block;}
+.panel-popover strong{color:var(--text);font-weight:600;}
+.panel-popover .po-row{
+  display:flex;gap:6px;padding:4px 0;
+  border-bottom:1px solid rgba(255,255,255,0.04);
+}
+.panel-popover .po-row:last-child{border-bottom:none;}
+.panel-popover .po-key{
+  flex-shrink:0;width:90px;
+  color:var(--muted);font-size:8px;
+  text-transform:uppercase;letter-spacing:0.08em;padding-top:1px;
+}
+.panel-popover .po-val{color:var(--sub);font-size:9px;line-height:1.5;}
+
+/* ── Global Help Modal ── */
+#help-modal-overlay{
+  display:none;position:fixed;inset:0;
+  background:rgba(0,0,0,0.7);z-index:600;
+  align-items:center;justify-content:center;
+}
+#help-modal-overlay.open{display:flex;}
+#help-modal{
+  background:var(--bg2);
+  border:1px solid var(--border2);
+  border-top:3px solid var(--blue);
+  width:min(680px,94vw);max-height:82vh;
+  display:flex;flex-direction:column;overflow:hidden;
+}
+.hm-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 18px;border-bottom:1px solid var(--border);flex-shrink:0;
+}
+.hm-title{
+  font-family:var(--font-head);font-weight:700;font-size:12px;
+  color:var(--text);letter-spacing:0.14em;text-transform:uppercase;
+}
+.hm-close{
+  width:24px;height:24px;background:var(--bg4);border:1px solid var(--border2);
+  color:var(--muted);cursor:pointer;font-size:14px;
+  display:flex;align-items:center;justify-content:center;
+  transition:all 0.15s;
+}
+.hm-close:hover{border-color:var(--red);color:var(--red);}
+.hm-tabs{
+  display:flex;border-bottom:1px solid var(--border);flex-shrink:0;
+}
+.hm-tab{
+  padding:8px 16px;font-family:var(--font-mono);font-size:9px;
+  letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);
+  cursor:pointer;border-bottom:2px solid transparent;
+  transition:all 0.15s;background:transparent;border-top:none;border-left:none;border-right:none;
+}
+.hm-tab:hover{color:var(--sub);}
+.hm-tab.active{color:var(--blue);border-bottom-color:var(--blue);}
+.hm-body{
+  flex:1;overflow-y:auto;padding:16px 18px;
+  display:flex;flex-direction:column;gap:4px;
+}
+.hm-body::-webkit-scrollbar{width:3px;}
+.hm-body::-webkit-scrollbar-thumb{background:var(--border2);}
+.hm-section-title{
+  font-family:var(--font-head);font-weight:700;font-size:9px;
+  color:var(--green);letter-spacing:0.16em;text-transform:uppercase;
+  padding:10px 0 6px;border-bottom:1px solid var(--border);margin-bottom:4px;
+}
+.hm-section-title:first-child{padding-top:0;}
+.hm-def{
+  display:grid;grid-template-columns:130px 1fr;gap:6px 12px;
+  padding:5px 0;border-bottom:1px solid rgba(255,255,255,0.04);
+  align-items:start;
+}
+.hm-def:last-child{border-bottom:none;}
+.hm-def-key{
+  font-size:9px;font-weight:600;color:var(--text);
+  letter-spacing:0.06em;padding-top:1px;
+}
+.hm-def-val{font-size:9px;color:var(--sub);line-height:1.6;}
+.hm-def-val em{color:var(--gold);font-style:normal;font-weight:600;}
+.hm-def-val b{color:var(--green);}
+.hm-note{
+  margin-top:8px;padding:8px 10px;
+  background:var(--blue-dim);border-left:2px solid var(--blue);
+  font-size:8px;color:var(--sub);line-height:1.6;
+}
+
+/* Rail help icon */
+#rail-help{margin-top:auto;margin-bottom:8px;}
+
 /* ── Copy Trade Buttons ── */
 .copy-bar{
   display:flex;gap:5px;margin-top:8px;padding-top:6px;
@@ -1202,6 +1359,7 @@ body{
   </div>
   <div class="rail-divider"></div>
   <div class="rail-icon" id="rail-refresh" title="Auto-Refresh">↻</div>
+  <div class="rail-icon" id="rail-help" title="Help & Glossary" style="margin-top:auto;margin-bottom:8px">?</div>
 </nav>
 
 <!-- ══ SCANNER DRAWER ══ -->
@@ -1309,6 +1467,18 @@ body{
         <div class="ph-bias-val" id="h-bias">—</div>
         <div class="ph-bias-conf" id="h-bias-conf">—</div>
       </div>
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 12px;border-left:1px solid var(--border)">
+        <button class="panel-help-btn" data-popover="pop-stats" title="What do these numbers mean?" style="width:20px;height:20px;font-size:9px">?</button>
+        <div style="font-size:7px;color:var(--muted);margin-top:3px;letter-spacing:0.06em">STATS</div>
+      </div>
+    </div>
+    <!-- Stats popover (renders below price hero) -->
+    <div class="panel-popover" id="pop-stats" style="border-top:2px solid var(--blue)">
+      <div class="po-row"><div class="po-key">SuperTrend</div><div class="po-val"><strong>BULLISH</strong> = price is in an uptrend right now. <strong>BEARISH</strong> = price is in a downtrend. This is the most straightforward trend signal.</div></div>
+      <div class="po-row"><div class="po-key">EFF. Ratio</div><div class="po-val"><strong>Efficiency Ratio</strong> — measures how "clean" the price move is. <strong>High (0.7+)</strong> = price is moving in a clear direction. <strong>Low (under 0.3)</strong> = price is choppy and directionless. CHOPPY label means wait before trading.</div></div>
+      <div class="po-row"><div class="po-key">Trend QI</div><div class="po-val"><strong>Trend Quality Index</strong> — overall quality of the current trend. <strong>HIGH (0.6+)</strong> = strong, clean trend worth following. <strong>LOW</strong> = weak or noisy trend, higher risk.</div></div>
+      <div class="po-row"><div class="po-key">RSI (14)</div><div class="po-val"><strong>Relative Strength Index</strong> — measures if a coin is overbought or oversold. <strong>Below 30</strong> = oversold (potential bounce). <strong>Above 70</strong> = overbought (potential pullback). <strong>40–60</strong> = neutral zone.</div></div>
+      <div class="po-row"><div class="po-key">Overall Bias</div><div class="po-val">The terminal's combined verdict. <strong>BULLISH</strong> = more reasons to buy than sell. <strong>BEARISH</strong> = more reasons to sell. Confidence % shows how strong that view is.</div></div>
     </div>
 
     <!-- 3-col grid -->
@@ -1319,6 +1489,14 @@ body{
         <div class="panel-hd">
           <span class="panel-hd-label">Derivatives</span>
           <span class="panel-hd-sub" id="deriv-src">BINANCE FUTURES</span>
+          <button class="panel-help-btn" data-popover="pop-deriv" title="What is this?">?</button>
+        </div>
+        <div class="panel-popover" id="pop-deriv">
+          <div class="po-row"><div class="po-key">Funding Rate</div><div class="po-val">A small fee paid between traders every 8 hours. <strong>Positive = longs paying shorts</strong> (market may be over-bought). <strong>Negative = shorts paying longs</strong> (market may be oversold).</div></div>
+          <div class="po-row"><div class="po-key">Open Interest</div><div class="po-val">Total number of active bets (contracts) open right now. <strong>Rising OI + rising price</strong> = strong trend. <strong>Falling OI</strong> = traders closing positions.</div></div>
+          <div class="po-row"><div class="po-key">Long / Short Ratio</div><div class="po-val">How many traders are betting the price goes up vs down. A very high ratio (everyone is long) can actually be a warning — when everyone is on one side, a reversal is more likely.</div></div>
+          <div class="po-row"><div class="po-key">Liquidation Zones</div><div class="po-val">Price levels where traders with borrowed money would be forced to close their positions. Price often moves toward these zones like a magnet.</div></div>
+          <div class="po-row"><div class="po-key">Price Spread</div><div class="po-val">Difference between the futures price and spot price. A big spread means traders are paying a premium for leveraged positions.</div></div>
         </div>
         <div class="deriv-section">
           <div class="deriv-sec-title">FUNDING & OPEN INTEREST</div>
@@ -1377,6 +1555,16 @@ body{
         <div class="panel-hd">
           <span class="panel-hd-label">Market Structure & Price Action</span>
           <span class="panel-hd-sub" id="struct-tf-label">—</span>
+          <button class="panel-help-btn" data-popover="pop-struct" title="What is this?">?</button>
+        </div>
+        <div class="panel-popover" id="pop-struct">
+          <div class="po-row"><div class="po-key">Trend (ST)</div><div class="po-val"><strong>SuperTrend</strong> — a direction indicator. Green BULLISH means price is above the trend line and rising. Red BEARISH means price is below and falling. Think of it as the market's current mood.</div></div>
+          <div class="po-row"><div class="po-key">BOS / CHoCH</div><div class="po-val"><strong>Break of Structure / Change of Character.</strong> A BOS means the market continued its trend (a high/low was broken). A CHoCH means the trend may be flipping — a warning that direction could reverse.</div></div>
+          <div class="po-row"><div class="po-key">Swing High / Low</div><div class="po-val">The most recent significant peak (swing high) and trough (swing low) in price. These act as natural targets and stop-loss reference points.</div></div>
+          <div class="po-row"><div class="po-key">Premium Zone</div><div class="po-val">The top 25% of the current price range. <strong>Price here is expensive</strong> — better to look for shorts or wait for a pullback before buying.</div></div>
+          <div class="po-row"><div class="po-key">Discount Zone</div><div class="po-val">The bottom 25% of the current price range. <strong>Price here is cheap</strong> — better zone to look for longs / buying opportunities.</div></div>
+          <div class="po-row"><div class="po-key">Fair Value Gaps</div><div class="po-val">Price gaps where the market moved so fast that no real trading happened. Price tends to revisit these zones to "fill" them — useful as entry targets.</div></div>
+          <div class="po-row"><div class="po-key">Multi-TF Scan</div><div class="po-val">The same coin analysed across different timeframes (5m, 1h, 4h etc.). When multiple timeframes agree on a direction, the signal is much stronger.</div></div>
         </div>
         <div id="canvasWrap"><canvas id="priceCanvas"></canvas></div>
         <div class="struct-grid" id="struct-grid">
@@ -1407,6 +1595,17 @@ body{
         <div class="panel-hd">
           <span class="panel-hd-label">Trade Scenarios</span>
           <span class="panel-hd-sub">UNBIASED · BOTH DIRECTIONS</span>
+          <button class="panel-help-btn" data-popover="pop-trade" title="What is this?">?</button>
+        </div>
+        <div class="panel-popover" id="pop-trade">
+          <div class="po-row"><div class="po-key">Primary Trade</div><div class="po-val">The <strong>main suggested trade</strong> based on the highest-confidence direction. This is what the majority of signals are pointing to.</div></div>
+          <div class="po-row"><div class="po-key">Counter Trade</div><div class="po-val">The <strong>opposite direction trade</strong>, shown for completeness. It has low confidence — only consider it if you see additional confirmation on a smaller timeframe.</div></div>
+          <div class="po-row"><div class="po-key">Entry Zone</div><div class="po-val">The ideal <strong>price range to enter the trade</strong>. If price hasn't reached here yet, wait — entering too early reduces your edge.</div></div>
+          <div class="po-row"><div class="po-key">Stop Loss (SL)</div><div class="po-val">The price where the trade idea is <strong>proven wrong</strong>. Always set your stop here — it protects you from large losses.</div></div>
+          <div class="po-row"><div class="po-key">TP 1 / TP 2</div><div class="po-val"><strong>Take Profit levels.</strong> TP1 is the first realistic target (consider taking partial profits here). TP2 is the extended target if momentum continues.</div></div>
+          <div class="po-row"><div class="po-key">Risk · Reward (R)</div><div class="po-val">How much you could gain vs how much you risk. <strong>3R means you could make 3× what you're risking.</strong> Higher is better — look for 2R minimum.</div></div>
+          <div class="po-row"><div class="po-key">Conviction</div><div class="po-val"><strong>HIGH</strong> = strong signal, multiple factors agree. <strong>MED</strong> = decent signal, some caution needed. <strong>LOW</strong> = weak signal, avoid or use very small size.</div></div>
+          <div class="po-row"><div class="po-key">Setup Rejected</div><div class="po-val">The engine found no clean trade opportunity right now. <strong>This is not a bad thing</strong> — it means the conditions aren't right. Wait for a better setup.</div></div>
         </div>
         <div id="scenarios-wrap">
           <div class="empty-state" style="height:280px">
@@ -1458,6 +1657,95 @@ body{
         <span>HIGH PRIORITY <span class="scan-stat-val" id="stat-high">—</span></span>
         <span>TF <span class="scan-stat-val" id="stat-tf">—</span></span>
         <span id="stat-time" style="color:var(--muted)">—</span>
+      </div>
+      <button class="guide-toggle-btn" id="guide-toggle-btn">⊕ HOW TO READ</button>
+    </div>
+
+    <!-- Heatmap Reading Guide -->
+    <div id="heatmap-guide">
+      <div class="hg-inner">
+        <div class="hg-group-title">How to read this page</div>
+
+        <div class="hg-item">
+          <div class="hg-swatch" style="background:rgba(0,230,118,0.8)"></div>
+          <div class="hg-text">
+            <div class="hg-label">Green block</div>
+            <div class="hg-desc">This coin is showing <strong>bullish signs</strong> — buyers are in control. The brighter the green, the stronger the signal.</div>
+          </div>
+        </div>
+
+        <div class="hg-item">
+          <div class="hg-swatch" style="background:rgba(255,60,60,0.8)"></div>
+          <div class="hg-text">
+            <div class="hg-label">Red block</div>
+            <div class="hg-desc">This coin is showing <strong>bearish signs</strong> — sellers are in control. Brighter red = stronger sell signal.</div>
+          </div>
+        </div>
+
+        <div class="hg-item">
+          <div class="hg-swatch" style="background:rgba(255,213,79,0.8)"></div>
+          <div class="hg-text">
+            <div class="hg-label">Gold / Yellow block</div>
+            <div class="hg-desc">Direction is <strong>mixed or unclear</strong>. No strong signal either way — best to wait and watch.</div>
+          </div>
+        </div>
+
+        <div class="hg-item">
+          <div class="hg-swatch" style="background:var(--bg4);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--text)">▲</div>
+          <div class="hg-text">
+            <div class="hg-label">▲ Arrow up (bottom-right)</div>
+            <div class="hg-desc">Bullish direction confirmed — the analysis points to a potential <strong>price rise</strong>.</div>
+          </div>
+        </div>
+
+        <div class="hg-item">
+          <div class="hg-swatch" style="background:var(--bg4);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--text)">▼</div>
+          <div class="hg-text">
+            <div class="hg-label">▼ Arrow down (bottom-right)</div>
+            <div class="hg-desc">Bearish direction confirmed — the analysis points to a potential <strong>price drop</strong>.</div>
+          </div>
+        </div>
+
+        <div class="hg-item">
+          <div class="hg-swatch" style="font-size:14px;display:flex;align-items:center;justify-content:center">⬜</div>
+          <div class="hg-text">
+            <div class="hg-label">Block size = Trading volume</div>
+            <div class="hg-desc">A <strong>bigger block</strong> means more money is being traded in that coin in the last 24 hours. Bigger = more active market.</div>
+          </div>
+        </div>
+
+        <div class="hg-item">
+          <div class="hg-swatch" style="background:var(--bg4);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--gold);font-weight:700">70</div>
+          <div class="hg-text">
+            <div class="hg-label">Number = Score (0–100)</div>
+            <div class="hg-desc">How strong the signal is. <strong>70+ is strong</strong>, 50–69 is moderate, below 50 is weak. Higher = more reasons to act.</div>
+          </div>
+        </div>
+
+        <div class="hg-item">
+          <div class="hg-swatch" style="background:var(--bg4);border:1px solid var(--border2)"></div>
+          <div class="hg-text">
+            <div class="hg-label">Filters (top bar)</div>
+            <div class="hg-desc"><strong>ALL</strong> = show everything. <strong>BREAKOUT</strong> = coins trying to break through a price wall. <strong>SQUEEZE</strong> = coins that have been ranging and may explode. <strong>TREND</strong> = coins already moving strongly in one direction.</div>
+          </div>
+        </div>
+
+        <div class="hg-item">
+          <div class="hg-swatch" style="background:var(--bg4);border:1px solid var(--border2)"></div>
+          <div class="hg-text">
+            <div class="hg-label">Click any block</div>
+            <div class="hg-desc">Clicking a coin opens the <strong>full analysis page</strong> for that coin — entry price, stop loss, targets, and reasoning.</div>
+          </div>
+        </div>
+
+        <div class="hg-item">
+          <div class="hg-swatch" style="background:var(--bg4);border:1px solid var(--border2)"></div>
+          <div class="hg-text">
+            <div class="hg-label">⊞ Heatmap vs ≡ Ranked</div>
+            <div class="hg-desc"><strong>Heatmap</strong> shows all coins visually at once. <strong>Ranked</strong> shows them as a sorted list with more detail per coin.</div>
+          </div>
+        </div>
+
       </div>
     </div>
 
@@ -4986,6 +5274,142 @@ document.addEventListener('click', e => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════
+// LEGEND & HELP SYSTEM
+// ═══════════════════════════════════════════════════════════════
+
+// ── Heatmap Guide Toggle ──
+document.getElementById('guide-toggle-btn').addEventListener('click', function() {
+  const guide = document.getElementById('heatmap-guide');
+  const isOpen = guide.classList.contains('open');
+  guide.classList.toggle('open', !isOpen);
+  this.classList.toggle('active', !isOpen);
+  this.textContent = isOpen ? '⊕ HOW TO READ' : '⊖ HOW TO READ';
+});
+
+// ── Panel Help Popovers ──
+document.querySelectorAll('.panel-help-btn').forEach(btn => {
+  btn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    const targetId = this.dataset.popover;
+    const pop = document.getElementById(targetId);
+    if (!pop) return;
+    const isOpen = pop.classList.contains('open');
+    document.querySelectorAll('.panel-popover.open').forEach(p => p.classList.remove('open'));
+    document.querySelectorAll('.panel-help-btn.active').forEach(b => b.classList.remove('active'));
+    if (!isOpen) {
+      pop.classList.add('open');
+      this.classList.add('active');
+    }
+  });
+});
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.panel-help-btn') && !e.target.closest('.panel-popover')) {
+    document.querySelectorAll('.panel-popover.open').forEach(p => p.classList.remove('open'));
+    document.querySelectorAll('.panel-help-btn.active').forEach(b => b.classList.remove('active'));
+  }
+});
+
+// ── Global Help Modal Content ──
+const HM_CONTENT = {
+  basics: `
+    <div class="hm-section-title">What is this tool?</div>
+    <div class="hm-def"><div class="hm-def-key">ATL Terminal</div><div class="hm-def-val">A market scanning and analysis tool for crypto futures. It looks at hundreds of coins and tells you which ones have the strongest signals for a potential trade — and in which direction.</div></div>
+    <div class="hm-def"><div class="hm-def-key">Analysis Page</div><div class="hm-def-val">Type any coin symbol (like BTC, ETH, SOL) and the tool will give you a full breakdown — trend, key price levels, and a suggested trade with entry, stop loss, and targets.</div></div>
+    <div class="hm-def"><div class="hm-def-key">Scanner Page</div><div class="hm-def-val">Automatically scans all major Binance futures coins and ranks them by signal strength. Use this when you don't know what to trade — let it find the opportunities for you.</div></div>
+    <div class="hm-section-title">Key Concepts (Plain English)</div>
+    <div class="hm-def"><div class="hm-def-key">Bullish</div><div class="hm-def-val">The analysis expects the price to go <b>up</b>. Signals suggest buying (going LONG).</div></div>
+    <div class="hm-def"><div class="hm-def-key">Bearish</div><div class="hm-def-val">The analysis expects the price to go <em>down</em>. Signals suggest selling (going SHORT).</div></div>
+    <div class="hm-def"><div class="hm-def-key">Long</div><div class="hm-def-val">A trade that profits when price goes <b>up</b>. You're betting the coin rises.</div></div>
+    <div class="hm-def"><div class="hm-def-key">Short</div><div class="hm-def-val">A trade that profits when price goes <em>down</em>. You're betting the coin falls.</div></div>
+    <div class="hm-def"><div class="hm-def-key">Timeframe (TF)</div><div class="hm-def-val">The period of each candle on the chart. <b>1W</b> = weekly (slow, big picture). <b>1D</b> = daily. <b>4H</b> = four hours. <b>1H</b> = one hour. <b>15m / 5m</b> = short-term. Longer timeframes = stronger, more reliable signals.</div></div>
+    <div class="hm-note">💡 Tip: If you're new to trading, start with the 4H or 1D timeframe. These are slower and easier to manage than 5m or 15m.</div>
+  `,
+  signals: `
+    <div class="hm-section-title">What the signals mean</div>
+    <div class="hm-def"><div class="hm-def-key">SuperTrend</div><div class="hm-def-val">The simplest trend signal. <b>BULLISH</b> = price is above the trend line and going up. <em>BEARISH</em> = price is below and going down. When this flips, the market is changing direction.</div></div>
+    <div class="hm-def"><div class="hm-def-key">BOS</div><div class="hm-def-val"><b>Break of Structure.</b> The price broke a previous high (bullish) or low (bearish). This confirms the trend continues. A bullish BOS is a green signal for longs.</div></div>
+    <div class="hm-def"><div class="hm-def-key">CHoCH</div><div class="hm-def-val"><b>Change of Character.</b> The first sign a trend might be reversing. Price broke in the opposite direction for the first time. Not confirmed yet — but worth watching.</div></div>
+    <div class="hm-def"><div class="hm-def-key">Fair Value Gap</div><div class="hm-def-val">A price gap caused by fast movement where little real trading happened. The market tends to come back and fill these gaps. <b>Good entry zones</b> for trades.</div></div>
+    <div class="hm-def"><div class="hm-def-key">Order Block</div><div class="hm-def-val">A zone where big institutions placed large orders. Price often bounces from these areas. <b>BULL OB</b> = support zone. <b>BEAR OB</b> = resistance zone.</div></div>
+    <div class="hm-def"><div class="hm-def-key">Premium Zone</div><div class="hm-def-val">Top 25% of the price range. <b>Price here is expensive</b> — better to sell or wait for a dip before buying.</div></div>
+    <div class="hm-def"><div class="hm-def-key">Discount Zone</div><div class="hm-def-val">Bottom 25% of the price range. <b>Price here is cheap</b> relative to the range — better zone to buy. Like buying something on sale.</div></div>
+    <div class="hm-def"><div class="hm-def-key">Liquidity Sweep</div><div class="hm-def-val">Price briefly dipped below a key low (or above a key high) to trigger stop-losses, then reversed. <b>Often signals a strong reversal</b> in the opposite direction.</div></div>
+    <div class="hm-def"><div class="hm-def-key">Breakout</div><div class="hm-def-val">Price pushed through a key resistance or support level. Suggests a <b>strong directional move</b> is starting.</div></div>
+    <div class="hm-def"><div class="hm-def-key">Squeeze</div><div class="hm-def-val">Price has been moving sideways, compressing like a spring. A big move is building. <b>Direction unclear until it breaks out</b> — wait for confirmation.</div></div>
+    <div class="hm-note">💡 The strongest trades have multiple signals agreeing. BOS + discount zone + bullish SuperTrend all at once is much stronger than just one signal alone.</div>
+  `,
+  numbers: `
+    <div class="hm-section-title">Understanding the numbers</div>
+    <div class="hm-def"><div class="hm-def-key">Score (0–100)</div><div class="hm-def-val">How many signals agree on a direction. <b>70–100 = strong</b>, act with confidence. <em>50–69 = moderate</em>, be selective. Below 50 = weak, avoid or wait.</div></div>
+    <div class="hm-def"><div class="hm-def-key">Confidence %</div><div class="hm-def-val">Similar to score but as a percentage. <b>70%+ = High conviction.</b> 55–69% = Medium. Below 55% = Low. Higher % means more signals pointing the same way.</div></div>
+    <div class="hm-def"><div class="hm-def-key">Risk · Reward (R)</div><div class="hm-def-val">How much you stand to gain vs lose. <b>3R means for every $1 you risk, you could make $3.</b> Always aim for at least 2R — anything below isn't worth the risk.</div></div>
+    <div class="hm-def"><div class="hm-def-key">RSI (14)</div><div class="hm-def-val">Measures buying and selling pressure. <b>Below 30</b> = heavily sold, may bounce. <b>Above 70</b> = heavily bought, may pull back. <em>40–60</em> = neutral.</div></div>
+    <div class="hm-def"><div class="hm-def-key">EFF. Ratio</div><div class="hm-def-val">How cleanly price is moving. <b>0.7+ = clean trend</b>, good to trade. <em>Below 0.3 = choppy</em>, just noise. MIXED = caution.</div></div>
+    <div class="hm-def"><div class="hm-def-key">Trend QI</div><div class="hm-def-val">Overall grade for the trend. <b>HIGH (0.6+)</b> = clear strong trend. <em>LOW (below 0.4)</em> = weak or unclear. Like a confidence score for the trend itself.</div></div>
+    <div class="hm-def"><div class="hm-def-key">Funding Rate</div><div class="hm-def-val">A fee paid every 8 hours between traders. <b>Positive = longs paying</b> (market over-crowded long, reversal risk). <em>Negative = shorts paying</em> (market may squeeze up).</div></div>
+    <div class="hm-def"><div class="hm-def-key">L/S Ratio</div><div class="hm-def-val">Long vs Short ratio. <b>Above 1.5</b> = very crowded longs (risky to be long). <em>Below 0.7</em> = very crowded shorts (risky to be short). Extremes often precede reversals.</div></div>
+    <div class="hm-def"><div class="hm-def-key">ATR</div><div class="hm-def-val">Average True Range — the average daily price movement. Helps you size your stop loss. If ATR is $2, a $0.50 stop is too tight. Use 1–2× ATR as your minimum stop distance.</div></div>
+    <div class="hm-note">💡 Don't chase high scores alone. A score of 80 on a BEARISH coin means it's a strong short — not a buy. Always check direction (▲ or ▼) alongside the score.</div>
+  `,
+  howto: `
+    <div class="hm-section-title">Step-by-step: How to find a trade</div>
+    <div class="hm-def"><div class="hm-def-key">Step 1</div><div class="hm-def-val"><b>Open the Scanner</b> — click the ◈ icon on the left. Choose your timeframe (4H or 1D for beginners) and click SCAN MARKET.</div></div>
+    <div class="hm-def"><div class="hm-def-key">Step 2</div><div class="hm-def-val"><b>Read the Heatmap</b> — look for the biggest, brightest green or red blocks with scores above 70. These are the strongest signals.</div></div>
+    <div class="hm-def"><div class="hm-def-key">Step 3</div><div class="hm-def-val"><b>Click a coin</b> — this opens the full Analysis page. Read the Trade Scenarios panel on the right.</div></div>
+    <div class="hm-def"><div class="hm-def-key">Step 4</div><div class="hm-def-val"><b>Check the setup</b> — look at Entry Zone, Stop Loss, and TP1/TP2. Only take HIGH or MED conviction setups.</div></div>
+    <div class="hm-def"><div class="hm-def-key">Step 5</div><div class="hm-def-val"><b>Check the SMC Checklist</b> — scroll down in the Trade panel. The more green ticks (✓), the stronger the trade. Fewer than 3 ticks = be cautious.</div></div>
+    <div class="hm-def"><div class="hm-def-key">Step 6</div><div class="hm-def-val"><b>Wait for entry</b> — if it says "NOT YET — WAIT FOR PRICE TO REACH ENTRY", be patient. Don't chase. Wait for price to come to the entry zone.</div></div>
+    <div class="hm-section-title">Mistakes to avoid</div>
+    <div class="hm-def"><div class="hm-def-key">Chasing price</div><div class="hm-def-val">Don't enter just because it's moving fast. Entering at the wrong level ruins your risk-reward ratio.</div></div>
+    <div class="hm-def"><div class="hm-def-key">Skipping the SL</div><div class="hm-def-val">The Stop Loss is not optional. Always place it. One trade without a stop can wipe out many good ones.</div></div>
+    <div class="hm-def"><div class="hm-def-key">Trading rejections</div><div class="hm-def-val">If you see "SETUP REJECTED — NO TRADE", don't force it. Move on and find a cleaner coin.</div></div>
+    <div class="hm-note">💡 The best traders take fewer, higher-quality trades. Wait for HIGH conviction setups rather than trading everything on the heatmap.</div>
+  `
+};
+
+function renderHelpModal(tab) {
+  document.getElementById('hm-body').innerHTML = HM_CONTENT[tab] || '';
+  document.querySelectorAll('.hm-tab').forEach(t => t.classList.toggle('active', t.dataset.hmtab === tab));
+}
+
+document.getElementById('rail-help').addEventListener('click', () => {
+  document.getElementById('help-modal-overlay').classList.add('open');
+  renderHelpModal('basics');
+});
+
+document.getElementById('hm-close-btn').addEventListener('click', () => {
+  document.getElementById('help-modal-overlay').classList.remove('open');
+});
+
+document.getElementById('help-modal-overlay').addEventListener('click', function(e) {
+  if (e.target === this) this.classList.remove('open');
+});
+
+document.querySelectorAll('.hm-tab').forEach(tab => {
+  tab.addEventListener('click', () => renderHelpModal(tab.dataset.hmtab));
+});
+
 </script>
+<!-- ══ GLOBAL HELP MODAL ══ -->
+<div id="help-modal-overlay">
+  <div id="help-modal">
+    <div class="hm-header">
+      <span class="hm-title">? Help &amp; Glossary</span>
+      <button class="hm-close" id="hm-close-btn">✕</button>
+    </div>
+    <div class="hm-tabs">
+      <button class="hm-tab active" data-hmtab="basics">Basics</button>
+      <button class="hm-tab" data-hmtab="signals">Signals</button>
+      <button class="hm-tab" data-hmtab="numbers">Numbers</button>
+      <button class="hm-tab" data-hmtab="howto">How to Use</button>
+    </div>
+    <div class="hm-body" id="hm-body">
+      <!-- content injected by JS -->
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
