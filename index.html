@@ -3521,7 +3521,7 @@ function updateTradeIdeas(data) {
           The ${dir} scenario generated from the previous swing (Entry ${fmtPrice(levels.entry)} /
           TP1 ${fmtPrice(levels.tp1)} / TP2 ${fmtPrice(levels.tp2)}) has already been reached
           or bypassed by price action. This trade is no longer actionable.<br><br>
-          <span style="color:var(--muted)">Reason: ${reason}<br>
+          <span style="color:var(--muted)">Reason: ${reason}.<br>
           Wait for price to form a new swing structure and re-run analysis.</span>
         </div>
       </div>`;
@@ -3571,21 +3571,15 @@ function updateTradeIdeas(data) {
         &nbsp;·&nbsp;Structure 40% · Location 25% · Momentum 30% · Derivatives 5%
       </div>
     </div>`;
-  // BUG-STALE-001 v3: per-case stale reason for user-facing notice
+  // BUG-STALE-001 v2: determine staleness reason string for user-facing notice
   const primaryValid = isLong ? longValid : shortValid;
   const primaryStaleReason = isLong
-    ? (currentPrice < longSL
-        ? `Price dropped below stop-loss (${fmtPrice(longSL)}) — long invalidated.`
-        : currentPrice >= longTP2
-          ? `TP2 (${fmtPrice(longTP2)}) already hit — full target reached. Wait for new swing.`
-          : 'Long scenario no longer actionable.')
-    : (currentPrice > shortSL
-        ? `Price rallied above stop-loss (${fmtPrice(shortSL)}) — short invalidated.`
-        : currentPrice <= shortTP2
-          ? `TP2 (${fmtPrice(shortTP2)}) already hit — full target reached. Wait for new swing.`
-          : currentPrice >= shortEntry
-            ? `Entry (${fmtPrice(shortEntry)}) not yet triggered — wait for rally to entry.`
-            : `Price (${fmtPrice(currentPrice)}) already below TP1 (${fmtPrice(shortTP1)}) — short opportunity passed without entry triggering.`);
+    ? (!longValid && data.currentPrice >= pl.tp2 ? 'TP2 already hit — full target reached. Wait for new swing.'
+      : !longValid && data.currentPrice <= pl.sl  ? 'Stop-loss blown — trade invalidated bearishly.'
+      : 'Scenario no longer actionable at current price.')
+    : (!shortValid && data.currentPrice <= pl.tp2 ? 'TP2 already hit — full target reached. Wait for new swing.'
+      : !shortValid && data.currentPrice >= pl.sl  ? 'Stop-loss blown — trade invalidated bullishly.'
+      : 'Scenario no longer actionable at current price.');
   const primaryCard = primaryValid ? `
     <div class="trade-card ${isLong?'long':'short'}">
       <div class="trade-dir ${isLong?'long':'short'}">
@@ -3609,13 +3603,8 @@ function updateTradeIdeas(data) {
   const isCounterLong = counterTxt==='LONG';
   const counterValid = isCounterLong ? longValid : shortValid;
   const counterStaleReason = isCounterLong
-    ? (currentPrice < longSL ? `Price below long stop-loss (${fmtPrice(longSL)}) — counter long invalidated.`
-      : currentPrice >= longTP2 ? `TP2 (${fmtPrice(longTP2)}) already hit — counter long complete.`
-      : 'Counter long no longer actionable.')
-    : (currentPrice > shortSL ? `Price above short stop-loss (${fmtPrice(shortSL)}) — counter short invalidated.`
-      : currentPrice <= shortTP2 ? `TP2 (${fmtPrice(shortTP2)}) already hit — counter short complete.`
-      : currentPrice < shortTP1 ? `Price (${fmtPrice(currentPrice)}) already below TP1 — counter short passed without entry.`
-      : 'Counter short no longer actionable.');
+    ? (data.currentPrice >= cl.tp2 ? 'TP2 already hit — full target reached.' : data.currentPrice <= cl.sl ? 'Stop-loss blown — counter long invalidated.' : 'Counter long no longer actionable.')
+    : (data.currentPrice <= cl.tp2 ? 'TP2 already hit — full target reached.' : data.currentPrice >= cl.sl ? 'Stop-loss blown — counter short invalidated.' : 'Counter short no longer actionable.');
   const counterCard = counterValid ? `
     <div class="trade-card counter">
       <div class="trade-dir counter">
@@ -3869,46 +3858,21 @@ function generateTradeIdeas(candles, stData, swings, fvgs, srLevels, rsi, er, tq
   const shortRisk  = shortSL - shortEntry;
   const shortRR    = shortRisk > 0 ? ((shortEntry - shortTP2) / shortRisk).toFixed(2) : 'N/A';
 
-  // BUG-STALE-001 FIX v3: Correct directional staleness logic.
-  //
-  // Trade levels are generated fresh from current swing data — on HTFs the swing that
-  // produced the setup may have already played out in full or in part. Four cases:
-  //
-  // LONG setup:
-  //   Entry is a LIMIT BUY below current price (wait for pullback to entry).
-  //   (A) VALID:   entry < currentPrice < longTP2 AND currentPrice > longSL
-  //       → price hasn't been stopped out, hasn't completed the full target yet
-  //   (B) STALE – stopped out:  currentPrice < longSL
-  //       → price dropped through the stop, trade invalidated
-  //   (C) STALE – full target:  currentPrice >= longTP2
-  //       → price already reached extended target, trade is complete
-  //   NOTE: currentPrice being ABOVE longTP1 but BELOW longTP2 = trade running toward TP2 = VALID
-  //
-  // SHORT setup:
-  //   Entry is a LIMIT SELL above current price (wait for rally to entry).
-  //   (A) VALID:   shortTP2 < currentPrice < shortEntry AND currentPrice < shortSL
-  //       → price hasn't been stopped out, hasn't completed the full target yet
-  //   (B) STALE – entry never triggered + ran past TP1:  currentPrice < shortTP1
-  //       → price dumped straight through TP1 level without ever rallying to entry —
-  //          the short opportunity is gone, trade is NOT live and levels are meaningless
-  //   (C) STALE – stopped out:  currentPrice > shortSL
-  //       → price rallied through the stop
-  //   (D) STALE – full target:  currentPrice <= shortTP2
-  //       → price already reached extended target
-  //
+  // BUG-STALE-001 FIX v2: Validate each trade scenario is still actionable at current price.
+  // On higher timeframes (1W/1D) swing highs/lows are weeks old — entry and TP levels
+  // may have already been hit and long since passed. Two staleness conditions:
+  //   (A) Trade completed: TP2 fully hit — price reached the extended target, scenario over.
+  //   (B) Trade stopped out: price blew through the stop-loss in the wrong direction,
+  //       meaning the position would have been closed at a loss and is no longer live.
+  // NOTE: price being above TP1 on a LONG is NOT stale — it means the trade is running
+  // toward TP2, which is exactly the desired outcome. Only TP2 completion = fully played out.
+  // When stale, the card is replaced with an explicit "SCENARIO PLAYED OUT" notice.
   const longValid =
-    currentPrice > longSL   &&   // not stopped out
-    currentPrice < longTP2;      // full target not yet hit (riding toward TP2 between TP1-TP2 is still valid)
-
-  // SHORT validity — two separate scenarios:
-  // (1) Entry triggered (price once rallied to entry, now riding down): currentPrice < shortEntry and not stopped out
-  // (2) Entry NOT triggered but price is already below TP1: opportunity passed, trade never started
-  // We detect case (2) as: shortEntry > currentPrice AND currentPrice < shortTP1
-  //   → price never reached entry (entry still above) but already blew past TP1 going down = dead trade
+    currentPrice < longTP2 &&            // (A) TP2 not yet hit — trade not fully completed
+    currentPrice > longSL;               // (B) SL not blown — trade not stopped out
   const shortValid =
-    currentPrice < shortSL  &&   // not stopped out going up
-    currentPrice > shortTP2 &&   // full target not yet hit going down
-    !(shortEntry > currentPrice && currentPrice < shortTP1); // reject: entry untriggered + price already past TP1
+    currentPrice > shortTP2 &&           // (A) TP2 not yet hit — trade not fully completed
+    currentPrice < shortSL;              // (B) SL not blown — trade not stopped out
 
   const tqiTxt   = tqi>0.65?'HIGH TQI — strong directional flow':tqi>0.35?'MODERATE TQI — mixed momentum':'LOW TQI — choppy, no clear trend';
   const zoneTxt  = inPremium?'PREMIUM zone':inDiscount?'DISCOUNT zone':'EQUILIBRIUM area';
