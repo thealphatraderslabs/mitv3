@@ -3502,7 +3502,7 @@ function updateTradeIdeas(data) {
   const { primaryDir, confPips, bullPct, weightedScore, confidenceLabel,
     primaryLevels:pl, primaryNarr, counterTxt, counterLevels:cl, counterNarr,
     tradeRejected, tradeDecisionReason,
-    longValid, shortValid,
+    longValid, shortValid, longStaleReason, shortStaleReason,
     lastTrend, inDiscount, inPremium, struct, rsi, tqi, lsRatio, funding } = data;
   const isLong = primaryDir === 'LONG';
   const bearPct = 100-bullPct;
@@ -3571,21 +3571,9 @@ function updateTradeIdeas(data) {
         &nbsp;·&nbsp;Structure 40% · Location 25% · Momentum 30% · Derivatives 5%
       </div>
     </div>`;
-  // BUG-STALE-001 v3: per-case stale reason for user-facing notice
+  // BUG-STALE-001 v3: reason strings are pre-built in generateTradeIdeas where all vars exist
   const primaryValid = isLong ? longValid : shortValid;
-  const primaryStaleReason = isLong
-    ? (currentPrice < longSL
-        ? `Price dropped below stop-loss (${fmtPrice(longSL)}) — long invalidated.`
-        : currentPrice >= longTP2
-          ? `TP2 (${fmtPrice(longTP2)}) already hit — full target reached. Wait for new swing.`
-          : 'Long scenario no longer actionable.')
-    : (currentPrice > shortSL
-        ? `Price rallied above stop-loss (${fmtPrice(shortSL)}) — short invalidated.`
-        : currentPrice <= shortTP2
-          ? `TP2 (${fmtPrice(shortTP2)}) already hit — full target reached. Wait for new swing.`
-          : currentPrice >= shortEntry
-            ? `Entry (${fmtPrice(shortEntry)}) not yet triggered — wait for rally to entry.`
-            : `Price (${fmtPrice(currentPrice)}) already below TP1 (${fmtPrice(shortTP1)}) — short opportunity passed without entry triggering.`);
+  const primaryStaleReason = isLong ? longStaleReason : shortStaleReason;
   const primaryCard = primaryValid ? `
     <div class="trade-card ${isLong?'long':'short'}">
       <div class="trade-dir ${isLong?'long':'short'}">
@@ -3608,14 +3596,7 @@ function updateTradeIdeas(data) {
 
   const isCounterLong = counterTxt==='LONG';
   const counterValid = isCounterLong ? longValid : shortValid;
-  const counterStaleReason = isCounterLong
-    ? (currentPrice < longSL ? `Price below long stop-loss (${fmtPrice(longSL)}) — counter long invalidated.`
-      : currentPrice >= longTP2 ? `TP2 (${fmtPrice(longTP2)}) already hit — counter long complete.`
-      : 'Counter long no longer actionable.')
-    : (currentPrice > shortSL ? `Price above short stop-loss (${fmtPrice(shortSL)}) — counter short invalidated.`
-      : currentPrice <= shortTP2 ? `TP2 (${fmtPrice(shortTP2)}) already hit — counter short complete.`
-      : currentPrice < shortTP1 ? `Price (${fmtPrice(currentPrice)}) already below TP1 — counter short passed without entry.`
-      : 'Counter short no longer actionable.');
+  const counterStaleReason = isCounterLong ? longStaleReason : shortStaleReason;
   const counterCard = counterValid ? `
     <div class="trade-card counter">
       <div class="trade-dir counter">
@@ -3938,13 +3919,31 @@ function generateTradeIdeas(candles, stData, swings, fvgs, srLevels, rsi, er, tq
     ? `Counter-trend SHORT (confidence ${100-weightedScore}% — Low). Valid only on ${inPremium?'rejection candle from premium zone':'CHoCH confirmation on lower TF'}. Entry ${fmtPrice(shortEntry)} (${shortEntryReason}), SL ${fmtPrice(shortSL)}, TP1 ${fmtPrice(shortTP1)}.`
     : `Counter-trend LONG (confidence ${weightedScore}% — Low). Valid only on ${inDiscount?'strong demand reaction at discount zone':'BOS confirmation on lower TF'}. Entry ${fmtPrice(longEntry)} (${longEntryReason}), SL ${fmtPrice(longSL)}, TP1 ${fmtPrice(longTP1)}.`;
 
+  // BUG-STALE-001 v3: compute reason strings HERE where currentPrice and all level vars are in scope.
+  // updateTradeIdeas does NOT have currentPrice — passing pre-built strings avoids ReferenceError.
+  const longStaleReason =
+    currentPrice < longSL
+      ? `Price dropped below stop-loss (${fmtPrice(longSL)}) — long invalidated.`
+      : currentPrice >= longTP2
+        ? `TP2 (${fmtPrice(longTP2)}) already hit — full target reached. Wait for new swing.`
+        : 'Long scenario no longer actionable.';
+
+  const shortStaleReason =
+    currentPrice > shortSL
+      ? `Price rallied above stop-loss (${fmtPrice(shortSL)}) — short invalidated.`
+      : currentPrice <= shortTP2
+        ? `TP2 (${fmtPrice(shortTP2)}) already hit — full target reached. Wait for new swing.`
+        : (shortEntry > currentPrice && currentPrice < shortTP1)
+          ? `Price (${fmtPrice(currentPrice)}) already below TP1 (${fmtPrice(shortTP1)}) without entry triggering — short opportunity passed.`
+          : 'Short scenario no longer actionable.';
+
   return {
     primaryDir, confPips, bullPct, weightedScore, confidenceLabel,
     primaryLevels, primaryNarr, counterTxt, counterLevels, counterNarr,
     atr, longEntryReason, shortEntryReason, currentPrice,
     tradeRejected, tradeDecisionReason: _tradeDecision.reason,
-    // BUG-STALE-001: validity flags — false means that scenario has already played out
-    longValid, shortValid,
+    // BUG-STALE-001: validity flags + pre-built reason strings (computed here where all vars exist)
+    longValid, shortValid, longStaleReason, shortStaleReason,
     // SMC checklist fields — needed by updateTradeIdeas BUG-015 fix
     lastTrend, inDiscount, inPremium, struct, rsi, tqi, lsRatio, funding,
   };
