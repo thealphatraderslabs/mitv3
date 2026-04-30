@@ -587,6 +587,26 @@ body{
   line-height:1.65;font-family:var(--font-mono);
   padding-top:6px;border-top:1px solid var(--border);
 }
+
+/* ── Copy Trade Buttons ── */
+.copy-bar{
+  display:flex;gap:5px;margin-top:8px;padding-top:6px;
+  border-top:1px solid var(--border);flex-wrap:wrap;
+}
+.copy-btn{
+  display:flex;align-items:center;gap:4px;
+  padding:4px 9px;
+  background:var(--bg4);
+  border:1px solid var(--border2);
+  color:var(--sub);
+  font-family:var(--font-mono);font-size:8px;
+  letter-spacing:0.1em;text-transform:uppercase;
+  cursor:pointer;transition:all 0.15s;white-space:nowrap;
+}
+.copy-btn:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-dim);}
+.copy-btn.success{border-color:var(--green)!important;color:var(--green)!important;background:var(--green-dim)!important;}
+.copy-btn.primary-copy{border-color:rgba(64,196,255,0.3);color:var(--blue);}
+.copy-btn.primary-copy:hover{background:var(--blue-dim);}
 .conf-bar{display:flex;gap:2px;margin-top:4px;}
 .conf-pip{width:7px;height:3px;background:var(--bg4);}
 .conf-pip.filled{background:var(--green);}
@@ -1508,6 +1528,7 @@ let _scanCancelled  = false;
 let _lastChartState = null;
 let _lastTicker     = '';
 let _lastTF         = '';
+let _lastTradeData  = null; // stores full trade context for clipboard copy
 let _autoOn         = false;
 let _autoTimer      = null;
 let _pipeCollapsed  = false;
@@ -4070,6 +4091,7 @@ async function runAnalysis() {
     }
 
     const tradeData = generateTradeIdeas(c, stData, swings, fvgs, srLevels, rsi, er, tqi, currentPrice, derivData);
+    _lastTradeData = { ...tradeData, ticker, tf, currentPrice, timestamp: new Date().toISOString() };
     updateTradeIdeas(tradeData);
 
     setStatus(ticker+' · '+tf.toUpperCase()+' · '+new Date().toISOString().slice(11,19)+' UTC','ok');
@@ -4623,8 +4645,205 @@ function renderRankedList(results) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// EVENT LISTENERS
+// COPY TRADE IDEA — CLIPBOARD FORMATTERS
 // ═══════════════════════════════════════════════════════════════
+
+function _copyFlash(btn, label) {
+  btn.classList.add('success');
+  btn.textContent = '✓ COPIED';
+  setTimeout(() => { btn.classList.remove('success'); btn.textContent = label; }, 1800);
+}
+
+async function _copyToClipboard(text, btn, label) {
+  try {
+    await navigator.clipboard.writeText(text);
+    _copyFlash(btn, label);
+  } catch(e) {
+    // Fallback
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    _copyFlash(btn, label);
+  }
+}
+
+// Full structured trade idea (primary card)
+function copyPrimaryTrade(d) {
+  if (!d || d.tradeRejected) return;
+  const pl = d.primaryLevels;
+  const dir = d.primaryDir;
+  const isLong = dir === 'LONG';
+  const conviction = d.weightedScore > 75 ? 'HIGH' : d.weightedScore >= 55 ? 'MED' : 'LOW';
+  const smcChecks = [
+    d.lastTrend === (isLong ? 1 : -1) ? '✓ SuperTrend aligned' : '· SuperTrend opposing',
+    (isLong ? d.inDiscount : d.inPremium) ? '✓ Price in ' + (isLong ? 'Discount' : 'Premium') : '· Price not at ideal zone',
+    d.struct && (isLong ? (d.struct.recentBOS_up || d.struct.recentCHOCH_up) : (d.struct.recentBOS_down || d.struct.recentCHOCH_down)) ? '✓ BOS/CHoCH confirmed' : '· No structure break',
+    (d.rsi !== null && (isLong ? d.rsi < 55 : d.rsi > 45)) ? `✓ RSI aligned (${d.rsi ? d.rsi.toFixed(1) : '—'})` : `· RSI neutral (${d.rsi ? d.rsi.toFixed(1) : '—'})`,
+    d.tqi > 0.5 ? `✓ TQI strong (${d.tqi.toFixed(2)})` : `· TQI weak (${d.tqi.toFixed(2)})`,
+    (isLong ? d.funding < -0.01 : d.funding > 0.02) ? `✓ Funding edge (${(d.funding||0).toFixed(4)}%)` : `· Funding neutral (${(d.funding||0).toFixed(4)}%)`,
+    (isLong ? d.lsRatio < 0.8 : d.lsRatio > 1.2) ? `✓ L/S crowded for trade (${(d.lsRatio||1).toFixed(2)})` : `· L/S neutral (${(d.lsRatio||1).toFixed(2)})`,
+  ].join('\n  ');
+
+  const lines = [
+    `╔══════════════════════════════════════════╗`,
+    `  ATL · TRADE IDEA  |  ${_lastTradeData?.ticker || ''}USDT  ·  ${(_lastTradeData?.tf || '').toUpperCase()}  ·  ${(_lastTradeData?.timestamp||'').slice(0,16).replace('T',' ')} UTC`,
+    `╚══════════════════════════════════════════╝`,
+    ``,
+    `  DIRECTION    ${isLong ? '▲ LONG' : '▼ SHORT'}`,
+    `  CONVICTION   ${conviction} (${d.weightedScore}%)`,
+    `  BIAS         BULL ${d.bullPct}%  vs  BEAR ${100-d.bullPct}%`,
+    `  CONFIDENCE   ${d.confidenceLabel}`,
+    ``,
+    `  ── LEVELS ─────────────────────────────`,
+    `  ENTRY         ${fmtPrice(pl.entry)}    ${isLong ? ((_lastTradeData && _lastTradeData.currentPrice < pl.entry * 1.005) ? '← WAIT FOR PULLBACK' : '● IN ZONE') : ((_lastTradeData && _lastTradeData.currentPrice > pl.entry * 0.995) ? '← WAIT FOR RALLY' : '● IN ZONE')}`,
+    `  STOP LOSS     ${fmtPrice(pl.sl)}`,
+    `  TP 1          ${fmtPrice(pl.tp1)}`,
+    `  TP 2          ${fmtPrice(pl.tp2)}`,
+    `  RISK·REWARD   ${pl.rr}R`,
+    `  RISK $        ${fmtPrice(Math.abs(pl.entry - pl.sl))} per unit`,
+    ``,
+    `  ── SMC CONFLUENCE ──────────────────────`,
+    `  ${smcChecks}`,
+    ``,
+    `  ── ANALYSIS ────────────────────────────`,
+    `  ${(d.primaryNarr || '').replace(/\. /g, '.\n  ')}`,
+    ``,
+    `  ─────────────────────────────────────────`,
+    `  Generated by ATL · Market Intelligence Terminal`,
+    `  thealphatraderslabs.github.io/mitv3/`,
+  ].join('\n');
+
+  return lines;
+}
+
+// Quick summary (one-liner + levels)
+function copyQuickTrade(d) {
+  if (!d || d.tradeRejected) return;
+  const pl = d.primaryLevels;
+  const dir = d.primaryDir;
+  const conviction = d.weightedScore > 75 ? 'HIGH' : d.weightedScore >= 55 ? 'MED' : 'LOW';
+  return [
+    `${dir === 'LONG' ? '▲ LONG' : '▼ SHORT'} ${_lastTradeData?.ticker || ''}USDT  [${(_lastTradeData?.tf||'').toUpperCase()}]  ${conviction} CONVICTION (${d.weightedScore}%)`,
+    `Entry: ${fmtPrice(pl.entry)}  |  SL: ${fmtPrice(pl.sl)}  |  TP1: ${fmtPrice(pl.tp1)}  |  TP2: ${fmtPrice(pl.tp2)}  |  RR: ${pl.rr}R`,
+    `Bias: BULL ${d.bullPct}% vs BEAR ${100-d.bullPct}%  ·  ${(_lastTradeData?.timestamp||'').slice(0,16).replace('T',' ')} UTC  ·  ATL Terminal`,
+  ].join('\n');
+}
+
+// Analysis narrative only
+function copyAnalysisOnly(d) {
+  if (!d) return;
+  const ticker = _lastTradeData?.ticker || '';
+  const tf = (_lastTradeData?.tf || '').toUpperCase();
+  const ts = (_lastTradeData?.timestamp||'').slice(0,16).replace('T',' ');
+  if (d.tradeRejected) {
+    return `ATL ANALYSIS — ${ticker}USDT ${tf} — ${ts} UTC\n\nSETUP REJECTED — NO TRADE\nReason: ${(d.tradeDecisionReason||'INVALID_SETUP').replace(/_/g,' ')}\n\nBias: BULL ${d.bullPct}% vs BEAR ${100-d.bullPct}%\nWaiting for valid confluence before entry.`;
+  }
+  return `ATL ANALYSIS — ${ticker}USDT ${tf} — ${ts} UTC\n\nBIAS: ${d.primaryDir === 'LONG' ? 'BULLISH' : 'BEARISH'} (${d.weightedScore}% confidence)\n\nPRIMARY SETUP:\n${d.primaryNarr}\n\nCOUNTER SCENARIO (${d.counterTxt}):\n${d.counterNarr}`;
+}
+
+// Inject copy buttons into a trade card element
+function injectCopyBar(cardEl, cardType, data) {
+  if (!cardEl) return;
+  // Remove existing copy bars on re-render
+  cardEl.querySelectorAll('.copy-bar').forEach(b => b.remove());
+
+  const bar = document.createElement('div');
+  bar.className = 'copy-bar';
+
+  if (cardType === 'primary') {
+    const btnFull = document.createElement('button');
+    btnFull.className = 'copy-btn primary-copy';
+    btnFull.innerHTML = '⎘ COPY TRADE IDEA';
+    btnFull.addEventListener('click', e => {
+      e.stopPropagation();
+      const text = copyPrimaryTrade(data);
+      if (text) _copyToClipboard(text, btnFull, '⎘ COPY TRADE IDEA');
+    });
+
+    const btnQuick = document.createElement('button');
+    btnQuick.className = 'copy-btn';
+    btnQuick.innerHTML = '⎘ QUICK COPY';
+    btnQuick.title = 'One-line summary with levels';
+    btnQuick.addEventListener('click', e => {
+      e.stopPropagation();
+      const text = copyQuickTrade(data);
+      if (text) _copyToClipboard(text, btnQuick, '⎘ QUICK COPY');
+    });
+
+    const btnAnalysis = document.createElement('button');
+    btnAnalysis.className = 'copy-btn';
+    btnAnalysis.innerHTML = '⎘ ANALYSIS';
+    btnAnalysis.title = 'Copy narrative analysis only';
+    btnAnalysis.addEventListener('click', e => {
+      e.stopPropagation();
+      const text = copyAnalysisOnly(data);
+      if (text) _copyToClipboard(text, btnAnalysis, '⎘ ANALYSIS');
+    });
+
+    bar.appendChild(btnFull);
+    bar.appendChild(btnQuick);
+    bar.appendChild(btnAnalysis);
+  } else {
+    // Counter card — quick copy only
+    const btn = document.createElement('button');
+    btn.className = 'copy-btn';
+    btn.innerHTML = '⎘ COPY COUNTER SETUP';
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const cl = data.counterLevels;
+      const dir = data.counterTxt;
+      const text = [
+        `COUNTER ${dir} — ${_lastTradeData?.ticker || ''}USDT [${(_lastTradeData?.tf||'').toUpperCase()}] LOW CONVICTION`,
+        `Entry: ${fmtPrice(cl.entry)}  |  SL: ${fmtPrice(cl.sl)}  |  TP1: ${fmtPrice(cl.tp1)}  |  TP2: ${fmtPrice(cl.tp2)}`,
+        `${data.counterNarr}`,
+        `ATL Terminal · ${(_lastTradeData?.timestamp||'').slice(0,16).replace('T',' ')} UTC`,
+      ].join('\n');
+      _copyToClipboard(text, btn, '⎘ COPY COUNTER SETUP');
+    });
+    bar.appendChild(btn);
+  }
+
+  cardEl.appendChild(bar);
+}
+
+// Hook into updateTradeIdeas — after innerHTML is set, inject buttons into rendered cards
+const _origUpdateTradeIdeas = updateTradeIdeas;
+updateTradeIdeas = function(data) {
+  _origUpdateTradeIdeas(data);
+  // After render, find trade cards and inject copy bars
+  if (data.tradeRejected) {
+    // Rejected: show analysis copy only on the rejection notice
+    const wrap = document.getElementById('scenarios-wrap');
+    if (wrap) {
+      const existingBar = wrap.querySelector('.copy-bar');
+      if (!existingBar) {
+        const bar = document.createElement('div');
+        bar.className = 'copy-bar';
+        bar.style.padding = '0 12px 10px';
+        const btn = document.createElement('button');
+        btn.className = 'copy-btn';
+        btn.innerHTML = '⎘ COPY REJECTION REPORT';
+        btn.addEventListener('click', e => {
+          e.stopPropagation();
+          const text = copyAnalysisOnly(data);
+          if (text) _copyToClipboard(text, btn, '⎘ COPY REJECTION REPORT');
+        });
+        bar.appendChild(btn);
+        wrap.appendChild(bar);
+      }
+    }
+    return;
+  }
+  const cards = document.querySelectorAll('#scenarios-wrap .trade-card');
+  cards.forEach((card, i) => {
+    // Skip stale cards (they have gold border styling — no copy needed)
+    if (card.style.borderColor && card.style.borderColor.includes('255, 165')) return;
+    if (i === 0) injectCopyBar(card, 'primary', data);
+    else if (i === 1) injectCopyBar(card, 'counter', data);
+  });
+};
 
 // BUG-010 FIX: Centralise auto-refresh toggle into one function so both
 // the rail icon and the button always update each other's visual state.
