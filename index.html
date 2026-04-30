@@ -1785,12 +1785,13 @@ function calcSuperTrend(candles, mult = 3.0, period = 14) {
     let resist  = hl2 + mult * atr;  // upper band candidate
 
     if (i > period) {
-      // Support only moves up (ratchet) while previous close was above it
-      support = (support > finalSupport || candles[i-1].close < finalSupport)
-        ? support : Math.max(support, finalSupport);
-      // Resist only moves down (ratchet) while previous close was below it
-      resist  = (resist < finalResist  || candles[i-1].close > finalResist)
-        ? resist  : Math.min(resist, finalResist);
+      // BUG-ST-001 FIX: Match TradingView Pine Script standard ratchet logic exactly.
+      // Support ratchets UP (takes max) as long as previous close was above the band.
+      // If previous close broke below, support resets to raw candidate (trend may flip bearish).
+      if (candles[i-1].close >= finalSupport) support = Math.max(support, finalSupport);
+      // Resist ratchets DOWN (takes min) as long as previous close was below the band.
+      // If previous close broke above, resist resets to raw candidate (trend may flip bullish).
+      if (candles[i-1].close <= finalResist)  resist  = Math.min(resist,  finalResist);
     }
     finalSupport = support;
     finalResist  = resist;
@@ -3747,7 +3748,10 @@ function generateTradeIdeas(candles, stData, swings, fvgs, srLevels, rsi, er, tq
     longEntryReason = 'ATR PULLBACK ZONE';
   }
   const longSL     = Math.min(lastSL - atr * 0.5, longEntry - atr);
-  const longTP1    = equil;
+  const longTP1raw  = equil;
+  // BUG-TP1-001 FIX: TP1 must always be beyond the entry. If price entered above equilibrium
+  // (e.g. via FVG mid), equil would be below entry making TP1 a loss target. Clamp to entry + 0.5 ATR minimum.
+  const longTP1     = Math.max(longTP1raw, longEntry + atr * 0.5);
   // BUG-013 FIX: TP2 must be strictly above TP1 by at least 0.5 ATR.
   // In ranging markets lastSH ≈ equil ≈ longTP1, making TP2 ≈ TP1 (meaningless).
   // Enforce a minimum separation so cards always show a distinct second target.
@@ -3774,7 +3778,9 @@ function generateTradeIdeas(candles, stData, swings, fvgs, srLevels, rsi, er, tq
     shortEntryReason = 'ATR RALLY ZONE';
   }
   const shortSL    = Math.max(lastSH + atr * 0.5, shortEntry + atr);
-  const shortTP1   = equil;
+  // BUG-TP1-001 FIX (SHORT mirror): shortTP1 = equil could be ABOVE shortEntry if entry
+  // is already below equilibrium. Clamp so TP1 is always at least 0.5 ATR below entry.
+  const shortTP1   = Math.min(equil, shortEntry - atr * 0.5);
   // BUG-013 FIX: Same separation guarantee for shorts — TP2 must be at least 0.5 ATR below TP1.
   const rawShortTP2 = sTarget < shortTP1 ? sTarget : lastSL;
   const shortTP2    = rawShortTP2 < shortTP1 - atr * 0.5
