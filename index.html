@@ -3663,7 +3663,20 @@ function generateTradeIdeas(candles, stData, swings, fvgs, srLevels, rsi, er, tq
 
   let bullSMC=0, bearSMC=0;
   if (lastTrend===1) bullSMC+=20; else bearSMC+=20;
-  if (inDiscount) bullSMC+=20; else if (inPremium) bearSMC+=20; else { bullSMC+=8; bearSMC+=8; }
+  // BUG-SCORE-001 FIX: inPremium/inDiscount must not award full opposing points when
+  // Supertrend already confirms the trend direction. Being in premium during a bull trend
+  // means price is extended — a caution signal, not a bear signal. Halve the zone score
+  // when it conflicts with trend so a mild RSI reading can't flip the primary direction
+  // against a clear confirmed trend.
+  if (inDiscount) {
+    const pts = (lastTrend === -1) ? 10 : 20; // halve if discount conflicts with bear trend
+    bullSMC += pts;
+  } else if (inPremium) {
+    const pts = (lastTrend === 1) ? 10 : 20;  // halve if premium conflicts with bull trend
+    bearSMC += pts;
+  } else {
+    bullSMC += 8; bearSMC += 8;
+  }
   const struct = detectStructure(candles, highs, lows);
   if (struct.events.length>0) { if (struct.events[0].dir==='bull') bullSMC+=20; else bearSMC+=20; }
   if (rsi) { if (rsi<40) bullSMC+=10; else if (rsi>65) bearSMC+=10; else if (rsi<52) bullSMC+=5; else bearSMC+=5; }
