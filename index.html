@@ -3577,20 +3577,19 @@ function updateTradeIdeas(data) {
     const isL = dir === 'LONG';
     if (status === 'in-trade') {
       return `<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;margin-bottom:5px;background:rgba(0,230,118,0.08);border:1px solid rgba(0,230,118,0.25);border-left:3px solid var(--green)">
-        <span style="font-family:var(--font-head);font-size:9px;font-weight:700;color:var(--green);letter-spacing:0.12em">● IN TRADE</span>
-        <span style="font-size:8px;color:var(--sub);margin-left:auto">RIDING TOWARD ${isL?'TP2 ▲':'TP2 ▼'} · ENTRY TRIGGERED</span>
+        <span style="font-family:var(--font-head);font-size:9px;font-weight:700;color:var(--green);letter-spacing:0.12em">● TRADE RUNNING</span>
+        <span style="font-size:8px;color:var(--sub);margin-left:auto">ENTRY HIT · RIDING TOWARD TP2 ${isL?'▲':'▼'}</span>
       </div>`;
     }
     if (status === 'active') {
       return `<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;margin-bottom:5px;background:rgba(255,213,79,0.08);border:1px solid rgba(255,213,79,0.3);border-left:3px solid var(--gold)">
-        <span style="font-family:var(--font-head);font-size:9px;font-weight:700;color:var(--gold);letter-spacing:0.12em">◉ ENTRY ZONE ACTIVE</span>
-        <span style="font-size:8px;color:var(--sub);margin-left:auto">WITHIN ${distPct}% OF ENTRY · ${isL?'WATCH FOR DEMAND':'WATCH FOR SUPPLY'}</span>
+        <span style="font-family:var(--font-head);font-size:9px;font-weight:700;color:var(--gold);letter-spacing:0.12em">◉ PRICE AT ENTRY — ACT NOW</span>
+        <span style="font-size:8px;color:var(--sub);margin-left:auto">WITHIN ${distPct}% · ${isL?'LOOK FOR BUY SIGNAL':'LOOK FOR SELL SIGNAL'}</span>
       </div>`;
     }
-    // waiting
     return `<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;margin-bottom:5px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);border-left:3px solid var(--muted)">
-      <span style="font-family:var(--font-head);font-size:9px;font-weight:700;color:var(--muted);letter-spacing:0.12em">○ AWAITING ENTRY</span>
-      <span style="font-size:8px;color:var(--muted);margin-left:auto">${distPct}% FROM ENTRY · ${isL?'WAIT FOR PULLBACK':'WAIT FOR RALLY'}</span>
+      <span style="font-family:var(--font-head);font-size:9px;font-weight:700;color:var(--muted);letter-spacing:0.12em">○ NOT YET — WAIT FOR PRICE TO REACH ENTRY</span>
+      <span style="font-size:8px;color:var(--muted);margin-left:auto">${distPct}% AWAY · ${isL?'NEEDS PULLBACK':'NEEDS RALLY'}</span>
     </div>`;
   }
 
