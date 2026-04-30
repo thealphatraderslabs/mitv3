@@ -600,7 +600,7 @@ body{
   transition:max-height 0.3s cubic-bezier(0.22,1,0.36,1);
   max-height:0;
 }
-#heatmap-guide.open{ max-height:320px; }
+#heatmap-guide.open{ max-height:900px; }
 .hg-inner{
   padding:14px 16px 16px;
   display:grid;
@@ -1727,6 +1727,66 @@ body{
           <div class="hg-text">
             <div class="hg-label">Filters (top bar)</div>
             <div class="hg-desc"><strong>ALL</strong> = show everything. <strong>BREAKOUT</strong> = coins trying to break through a price wall. <strong>SQUEEZE</strong> = coins that have been ranging and may explode. <strong>TREND</strong> = coins already moving strongly in one direction.</div>
+          </div>
+        </div>
+
+        <div class="hg-group-title" style="margin-top:6px">Market Classification Badges</div>
+
+        <div class="hg-item">
+          <div class="hg-swatch" style="background:var(--blue-dim);border:1px solid rgba(64,196,255,0.3);display:flex;align-items:center;justify-content:center;font-size:7px;color:var(--blue);font-weight:700;letter-spacing:0.06em">BRK</div>
+          <div class="hg-text">
+            <div class="hg-label" style="color:var(--blue)">BREAKOUT</div>
+            <div class="hg-desc">Price is pushing through a key resistance or support level it previously could not pass. Signals the start of a strong directional move. <strong>Act fast — breakouts can move quickly.</strong></div>
+          </div>
+        </div>
+
+        <div class="hg-item">
+          <div class="hg-swatch" style="background:var(--red-dim);border:1px solid rgba(255,68,68,0.3);display:flex;align-items:center;justify-content:center;font-size:7px;color:var(--red);font-weight:700;letter-spacing:0.06em">SQZ</div>
+          <div class="hg-text">
+            <div class="hg-label" style="color:var(--red)">SQUEEZE</div>
+            <div class="hg-desc">Price has been coiling sideways in a tight range — like a compressed spring. Volatility is low now but a big move is building. <strong>Direction is not yet confirmed — wait for a clear breakout before entering.</strong></div>
+          </div>
+        </div>
+
+        <div class="hg-item">
+          <div class="hg-swatch" style="background:var(--green-dim);border:1px solid rgba(0,230,118,0.3);display:flex;align-items:center;justify-content:center;font-size:7px;color:var(--green);font-weight:700;letter-spacing:0.06em">TRD</div>
+          <div class="hg-text">
+            <div class="hg-label" style="color:var(--green)">TREND CONTINUATION</div>
+            <div class="hg-desc">This coin is already in a clean, established trend (up or down). The signal is to ride the existing momentum. <strong>Highest reliability — trade in the direction of the trend only.</strong></div>
+          </div>
+        </div>
+
+        <div class="hg-group-title" style="margin-top:6px">Market State Badges (on Ranked cards)</div>
+
+        <div class="hg-item">
+          <div class="hg-swatch" style="background:var(--green-dim);border:1px solid rgba(0,230,118,0.25);display:flex;align-items:center;justify-content:center;font-size:6px;color:var(--green);font-weight:700;letter-spacing:0.05em">TRD</div>
+          <div class="hg-text">
+            <div class="hg-label" style="color:var(--green)">TREND</div>
+            <div class="hg-desc">Price is moving cleanly in one direction with consistent higher-highs (up) or lower-lows (down). Supertrend and structure agree. Strong conditions for momentum trades.</div>
+          </div>
+        </div>
+
+        <div class="hg-item">
+          <div class="hg-swatch" style="background:var(--gold-dim);border:1px solid rgba(255,213,79,0.25);display:flex;align-items:center;justify-content:center;font-size:6px;color:var(--gold);font-weight:700;letter-spacing:0.05em">RNG</div>
+          <div class="hg-text">
+            <div class="hg-label" style="color:var(--gold)">RANGE</div>
+            <div class="hg-desc">Price is bouncing between a ceiling (resistance) and a floor (support) without breaking either. No clear direction — wait for a breakout, or trade the range boundaries if you're experienced.</div>
+          </div>
+        </div>
+
+        <div class="hg-item">
+          <div class="hg-swatch" style="background:rgba(255,144,64,0.12);border:1px solid rgba(255,144,64,0.25);display:flex;align-items:center;justify-content:center;font-size:6px;color:var(--orange);font-weight:700;letter-spacing:0.05em">TRN</div>
+          <div class="hg-text">
+            <div class="hg-label" style="color:var(--orange)">TRANSITION</div>
+            <div class="hg-desc">The market just broke structure (BOS or CHoCH) and may be switching direction. A trend could be starting — but it's not confirmed yet. <strong>Higher risk — wait for follow-through before committing.</strong></div>
+          </div>
+        </div>
+
+        <div class="hg-item">
+          <div class="hg-swatch" style="background:var(--blue-dim);border:1px solid rgba(64,196,255,0.25);display:flex;align-items:center;justify-content:center;font-size:6px;color:var(--blue);font-weight:700;letter-spacing:0.05em">EXP</div>
+          <div class="hg-text">
+            <div class="hg-label" style="color:var(--blue)">EXPANSION</div>
+            <div class="hg-desc">Price broke out of a range and is now moving fast and far in one direction — a full expansion move is underway. Strong momentum, but <strong>entering late in expansion is risky</strong> — the move may be nearly done.</div>
           </div>
         </div>
 
@@ -5379,16 +5439,24 @@ document.getElementById('rail-help').addEventListener('click', () => {
   renderHelpModal('basics');
 });
 
-document.getElementById('hm-close-btn').addEventListener('click', () => {
-  document.getElementById('help-modal-overlay').classList.remove('open');
-});
+// Modal event listeners deferred until DOM is ready (modal HTML is below the script tag)
+document.addEventListener('DOMContentLoaded', () => {
+  const overlay = document.getElementById('help-modal-overlay');
+  const closeBtn = document.getElementById('hm-close-btn');
 
-document.getElementById('help-modal-overlay').addEventListener('click', function(e) {
-  if (e.target === this) this.classList.remove('open');
-});
+  if (closeBtn) {
+    closeBtn.addEventListener('click', () => overlay.classList.remove('open'));
+  }
 
-document.querySelectorAll('.hm-tab').forEach(tab => {
-  tab.addEventListener('click', () => renderHelpModal(tab.dataset.hmtab));
+  if (overlay) {
+    overlay.addEventListener('click', function(e) {
+      if (e.target === this) this.classList.remove('open');
+    });
+  }
+
+  document.querySelectorAll('.hm-tab').forEach(tab => {
+    tab.addEventListener('click', () => renderHelpModal(tab.dataset.hmtab));
+  });
 });
 
 </script>
