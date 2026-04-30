@@ -3643,10 +3643,15 @@ function generateTradeIdeas(candles, stData, swings, fvgs, srLevels, rsi, er, tq
   const { highs, lows } = swings;
   const lastSH = highs.length>0 ? highs[highs.length-1].price : currentPrice*1.03;
   const lastSL = lows.length>0  ? lows[lows.length-1].price   : currentPrice*0.97;
-  const rng    = lastSH-lastSL || currentPrice*0.05;
-  const premium  = lastSH-rng*0.25;
-  const discount = lastSL+rng*0.25;
-  const equil    = (lastSH+lastSL)/2;
+  // BUG-ZONE-001 FIX: When price breaks out beyond the tracked swing range, the premium/discount
+  // framework becomes stale and produces entries below current price for shorts (or above for longs).
+  // Extend the effective boundary to current price so zones always bracket the live market.
+  const effectiveSH = Math.max(lastSH, currentPrice);
+  const effectiveSL = Math.min(lastSL, currentPrice);
+  const rng    = effectiveSH-effectiveSL || currentPrice*0.05;
+  const premium  = effectiveSH-rng*0.25;
+  const discount = effectiveSL+rng*0.25;
+  const equil    = (effectiveSH+effectiveSL)/2;
   const inPremium  = currentPrice > premium;
   const inDiscount = currentPrice < discount;
   const nearR = srLevels.find(l=>l.zone==='resistance');
@@ -3747,7 +3752,14 @@ function generateTradeIdeas(candles, stData, swings, fvgs, srLevels, rsi, er, tq
     longEntry = Math.max(discount, currentPrice - atr * 0.75);
     longEntryReason = 'ATR PULLBACK ZONE';
   }
-  const longSL     = Math.min(lastSL - atr * 0.5, longEntry - atr);
+  // BUG-ENTRY-001 FIX (LONG mirror): Long entry must always be AT or BELOW current price.
+  // If discount zone is stale or price already dropped past it, longEntry can land above
+  // current price — making it an impossible limit order. Clamp to current price - 0.5 ATR maximum.
+  if (longEntry > currentPrice) {
+    longEntry = currentPrice - atr * 0.5;
+    longEntryReason = 'ATR PULLBACK ZONE';
+  }
+  const longSL     = Math.min(effectiveSL - atr * 0.5, longEntry - atr);
   const longTP1raw  = equil;
   // BUG-TP1-001 FIX: TP1 must always be beyond the entry. If price entered above equilibrium
   // (e.g. via FVG mid), equil would be below entry making TP1 a loss target. Clamp to entry + 0.5 ATR minimum.
@@ -3755,7 +3767,7 @@ function generateTradeIdeas(candles, stData, swings, fvgs, srLevels, rsi, er, tq
   // BUG-013 FIX: TP2 must be strictly above TP1 by at least 0.5 ATR.
   // In ranging markets lastSH ≈ equil ≈ longTP1, making TP2 ≈ TP1 (meaningless).
   // Enforce a minimum separation so cards always show a distinct second target.
-  const rawLongTP2 = rTarget > longTP1 ? rTarget : lastSH;
+  const rawLongTP2 = rTarget > longTP1 ? rTarget : effectiveSH;
   const longTP2    = rawLongTP2 > longTP1 + atr * 0.5
     ? rawLongTP2
     : longTP1 + atr * 1.0;   // fallback: 1 ATR extension above TP1
@@ -3777,12 +3789,20 @@ function generateTradeIdeas(candles, stData, swings, fvgs, srLevels, rsi, er, tq
     shortEntry = Math.min(premium, currentPrice + atr * 0.75);
     shortEntryReason = 'ATR RALLY ZONE';
   }
-  const shortSL    = Math.max(lastSH + atr * 0.5, shortEntry + atr);
+  // BUG-ENTRY-001 FIX: Short entry must always be AT or ABOVE current price.
+  // If premium zone is stale or price already blew past it, the computed shortEntry
+  // can land below current price — making it an impossible limit order (price must
+  // rally UP to entry before dropping). Clamp to current price + 0.5 ATR minimum.
+  if (shortEntry < currentPrice) {
+    shortEntry = currentPrice + atr * 0.5;
+    shortEntryReason = 'ATR RALLY ZONE';
+  }
+  const shortSL    = Math.max(effectiveSH + atr * 0.5, shortEntry + atr);
   // BUG-TP1-001 FIX (SHORT mirror): shortTP1 = equil could be ABOVE shortEntry if entry
   // is already below equilibrium. Clamp so TP1 is always at least 0.5 ATR below entry.
   const shortTP1   = Math.min(equil, shortEntry - atr * 0.5);
   // BUG-013 FIX: Same separation guarantee for shorts — TP2 must be at least 0.5 ATR below TP1.
-  const rawShortTP2 = sTarget < shortTP1 ? sTarget : lastSL;
+  const rawShortTP2 = sTarget < shortTP1 ? sTarget : effectiveSL;
   const shortTP2    = rawShortTP2 < shortTP1 - atr * 0.5
     ? rawShortTP2
     : shortTP1 - atr * 1.0;  // fallback: 1 ATR extension below TP1
