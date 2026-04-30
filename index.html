@@ -2688,19 +2688,14 @@ function analyzeCoin(candles, derivs) {
     return null; // ← HARD STOP. No scoring. No UI. Nothing.
   }
 
-  // STEP 4b — BUG-008 FIX: Also run DECISION.validate() so that the scanner pipeline
-  // and the Trade Ideas panel share identical validation logic. Previously only
-  // generateTradeIdeas() called DECISION.validate() — creating two independent gates
-  // that could produce contradictory pass/fail results on the same coin.
-  const decisionNS = DECISION.validate(
-    ctx.bias, ctx.struct, 'mid', // entryQuality passed as 'mid' (neutral) at this stage
-    ctx.marketState || 'RANGE',
-    ctx.liqData, ctx.structEvents, ctx.compressionScore
-  );
-  if (!decisionNS.valid) {
-    analyzeCoin._lastRejectReason = decisionNS.reason;
-    return null;
-  }
+  // STEP 4b — NOTE: DECISION.validate() was previously added here as a second gate
+  // (BUG-008 fix attempt) but it caused ~90% of coins to be rejected with
+  // NO_STRUCTURE_NO_LIQUIDITY. Root cause: DECISION.checkCompression requires
+  // structEvents OR sweepDetected OR compressionScore>50 — but after the BOS recency
+  // tightening (BUG-002, RECENCY_BARS=20), most coins have zero recent structure events,
+  // so the gate always fired. DECISION.validate() is correctly used only inside
+  // generateTradeIdeas() where the Trade Ideas panel needs its stricter 3-rule check.
+  // The main pipeline is fully gated by validateSetup() 8 rules above — that is sufficient.
 
   // STEP 5 — Entry quality (EARLY/MID/LATE) with bias-aware position
   const entryQuality = calculateEntryQuality(ctx);
@@ -3690,12 +3685,14 @@ function generateTradeIdeas(candles, stData, swings, fvgs, srLevels, rsi, er, tq
   const _tradeEQ = calculateEntryQuality(_tradeCtx);
 
   // ── DECISION: validate this trade setup before building levels ──
-  const _tradeDecision = DECISION.validate(
-    tradesBias, struct, _tradeEQ.quality, 'RANGE', // RANGE = safe default, no liqData here
-    null, struct.events, 0
-  );
-  // If hard rejected, bail early — confidence score is meaningless on a rejected setup
-  const tradeRejected = !_tradeDecision.valid;
+  // ── DECISION: validate bias conflicts only — compression is a penalty not a hard gate ──
+  // Previously called DECISION.validate() with compressionScore=0 (hardcoded), which caused
+  // checkCompression to always fire NO_STRUCTURE_NO_LIQUIDITY when struct.events was empty.
+  // Fix: only hard-reject on checkBiasConflict (the only rule appropriate for Trade Ideas).
+  // Compression and entry extreme checks apply score penalties via weightedScore, not hard gates.
+  const _biasCheck = DECISION.checkBiasConflict(tradesBias, struct);
+  const tradeRejected = !_biasCheck.valid;
+  const _tradeDecision = { valid: _biasCheck.valid, reason: _biasCheck.reason, penalty: _biasCheck.penalty };
 
   // ── WEIGHTED CONFIDENCE SCORE ──
   // Hierarchy: Structure (40%) > Location (25%) > Momentum (30%) > Derivatives (5%)
@@ -4471,6 +4468,14 @@ function setAutoRefresh(on) {
 }
 
 document.getElementById('rail-refresh').addEventListener('click', () => setAutoRefresh(!_autoOn));
+
+// BUG-010 NOTE: rail-analysis and rail-scanner listeners were accidentally dropped
+// when the old combined rail block was replaced. Restored here.
+document.getElementById('rail-analysis').addEventListener('click', () => switchToAnalysis());
+document.getElementById('rail-scanner').addEventListener('click', () => {
+  if (_currentStage === 'scanner') toggleDrawer();
+  else { openDrawer(); switchToScanner(); }
+});
 
 // Analysis controls
 document.getElementById('analysisBtn').addEventListener('click', runAnalysis);
