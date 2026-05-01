@@ -1684,7 +1684,7 @@ body{
       <div class="scanner-stats" id="scanner-stats" style="display:none">
         <span>SCANNED <span class="scan-stat-val" id="stat-scanned">—</span></span>
         <span>VALID <span class="scan-stat-val" id="stat-valid">—</span></span>
-        <span>HIGH PRIORITY <span class="scan-stat-val" id="stat-high">—</span></span>
+        <span id="stat-high-label">HIGH PRIORITY <span class="scan-stat-val" id="stat-high">—</span></span>
         <span>TF <span class="scan-stat-val" id="stat-tf">—</span></span>
         <span id="stat-time" style="color:var(--muted)">—</span>
       </div>
@@ -4896,14 +4896,22 @@ async function runMarketScan() {
         // null → skip immediately. DO NOT score. DO NOT rank.
         // DO NOT show in ranked list or heatmap.
         // ═══════════════════════════════════════════════════════
-        const result = analyzeCoin(candles, derivs);
+        const result = _scanMode === 'radar'
+          ? radarScore(candles, derivs, tickers[sym]?.vol || 0)
+          : analyzeCoin(candles, derivs);
 
-        // HARD GATE — null means the pipeline rejected this coin
+        // HARD GATE — null means rejected
         if (result === null) {
           rejected++;
-          // Capture the specific rejection reason for pipeline diagnostics
-          const reason = analyzeCoin._lastRejectReason || 'PIPELINE_REJECT';
+          const reason = _scanMode === 'radar' ? 'RADAR_INSUFFICIENT_DATA' : (analyzeCoin._lastRejectReason || 'PIPELINE_REJECT');
           rejectTally[reason] = (rejectTally[reason] || 0) + 1;
+          return;
+        }
+
+        // Radar mode: apply score threshold (≥40 — lower bar since no structure gate)
+        if (_scanMode === 'radar' && result.score < 40) {
+          rejected++;
+          rejectTally['RADAR_LOW_SCORE'] = (rejectTally['RADAR_LOW_SCORE'] || 0) + 1;
           return;
         }
 
@@ -4938,49 +4946,77 @@ async function runMarketScan() {
     pipeUpdateStep('pipe-s4','✓ ANALYSIS COMPLETE','ok',
       `<span class="hl">${scanResults.length} coins passed all gates</span> · <span class="red">${rejected} rejected by pipeline</span> · <span class="red">${failed} failed fetch</span>`);
 
-    pipeAddStep(5,'◈','DECISION ENGINE OUTPUT','info',
-      `<div style="margin-bottom:4px">
-         <span class="pipe-badge green">${highPriority} HIGH PRIORITY ≥80</span>
-         <span class="pipe-badge amber">${watchlist} WATCHLIST 65-79</span>
-         <span class="pipe-badge amber">${breakoutSets} BREAKOUT</span>
-         <span class="pipe-badge red">${squeezeSets} SQUEEZE</span>
-         <span class="pipe-badge blue">${trendSets} TREND CONT.</span>
-         <span class="pipe-badge green">${bullBias} BULL</span>
-         <span class="pipe-badge red">${bearBias} BEAR</span>
-         · <span class="hl">${new Date().toISOString().slice(11,19)} UTC</span>
-       </div>
-       <div style="margin-top:5px;padding-top:5px;border-top:1px solid rgba(255,255,255,0.06);font-size:8px;color:var(--muted);letter-spacing:0.06em">
-         GATE STATS ·
-         <span style="color:var(--red)">${rejected} rejected</span> ·
-         <span style="color:var(--muted)">${failed} fetch fail</span> ·
-         <span style="color:var(--green)">${scanResults.length} passed</span>
-         — pipeline enforced: structure → setup → validate → entry → score
-       </div>
-       <div style="margin-top:4px;font-size:8px;color:var(--muted);letter-spacing:0.06em">
-         REJECTION BREAKDOWN ·
-         <span style="color:var(--red)">${(rejectTally['INVALID_STRUCTURE']||0)+(rejectTally['NO_CLEAN_SETUP']||0)} NO STRUCT/SETUP</span> ·
-         <span style="color:var(--orange)">${(rejectTally['CONTRA_TREND_LONG_IN_DOWNTREND']||0)+(rejectTally['CONTRA_TREND_SHORT_IN_UPTREND']||0)+(rejectTally['BULL_BIAS_BEAR_BOS']||0)+(rejectTally['BEAR_BIAS_BULL_BOS']||0)+(rejectTally['BULL_BIAS_BEAR_TREND']||0)+(rejectTally['BEAR_BIAS_BULL_TREND']||0)} CONTRA-TREND</span> ·
-         <span style="color:var(--gold)">${rejectTally['LATE_ENTRY_REJECTED']||0} LATE ENTRY</span> ·
-         <span style="color:var(--muted)">${(rejectTally['NO_VOLATILITY']||0)+(rejectTally['DEAD_MARKET']||0)} LOW VOL</span> ·
-         <span style="color:var(--muted)">${(rejectTally['BULL_IN_PREMIUM_NO_PULLBACK']||0)+(rejectTally['BEAR_IN_DISCOUNT_NO_PULLBACK']||0)} PREMIUM/DISCOUNT</span> ·
-         <span style="color:var(--muted)">${rejectTally['SCORE_BELOW_THRESHOLD']||0} LOW SCORE</span>
-       </div>
-       <div style="margin-top:4px;font-size:8px;color:var(--muted);letter-spacing:0.06em">
-         LIQUIDITY BREAKDOWN ·
-         <span style="color:var(--green)">${reasonTally.VALID_SETUP||0} VALID SETUP</span> ·
-         <span style="color:var(--gold)">${reasonTally.SWEEP_NO_BOS||0} SWEEP/NO BOS</span> ·
-         <span style="color:var(--blue)">${reasonTally.INDUCEMENT_ONLY||0} INDUCEMENT</span> ·
-         <span style="color:var(--muted)">${(reasonTally.NO_STRUCTURE||0)+(reasonTally.STRUCTURE_NO_LIQUIDITY||0)} NO STRUCT</span>
-       </div>`,'pipe-s5');
-
-    // Collapse log to summary
-    setTimeout(() => {
-      pipeCollapse(`✓ SCAN COMPLETE · ${scanResults.length} passed · ${highPriority} HIGH PRIORITY · ${watchlist} WATCHLIST · ${rejected} rejected · ${tf.toUpperCase()} · ${new Date().toISOString().slice(11,19)} UTC`);
-    }, 1200);
+    if (_scanMode === 'radar') {
+      // Radar-specific pipeline output
+      const highRadar = scanResults.filter(r=>r.score>=70).length;
+      const midRadar  = scanResults.filter(r=>r.score>=50&&r.score<70).length;
+      const coilCount = scanResults.filter(r=>r.signal==='TIGHT COIL'||r.signal==='COIL + LIQ').length;
+      const sqzCount  = scanResults.filter(r=>r.signal==='SQUEEZE BUILD').length;
+      const liqCount  = scanResults.filter(r=>r.signal==='LIQ MAGNET').length;
+      pipeAddStep(5,'⚡','RADAR ENGINE OUTPUT','info',
+        `<div style="margin-bottom:4px">
+           <span class="pipe-badge green">${highRadar} HIGH ENERGY ≥70</span>
+           <span class="pipe-badge amber">${midRadar} BUILDING 50-69</span>
+           <span class="pipe-badge blue">${coilCount} COIL+LIQ</span>
+           <span class="pipe-badge red">${sqzCount} SQUEEZE BUILD</span>
+           <span class="pipe-badge amber">${liqCount} LIQ MAGNET</span>
+           · <span class="hl">${new Date().toISOString().slice(11,19)} UTC</span>
+         </div>
+         <div style="margin-top:5px;padding-top:5px;border-top:1px solid rgba(255,255,255,0.06);font-size:8px;color:var(--muted);letter-spacing:0.06em">
+           No structure gate. No direction gate. Scoring: Compression 40% · Liquidity 25% · Derivatives 20% · Volume 15%
+         </div>`,'pipe-s5');
+      setTimeout(() => {
+        pipeCollapse(`⚡ RADAR SCAN · ${scanResults.length} coins · ${highRadar} HIGH ENERGY · ${rejected} filtered · ${tf.toUpperCase()} · ${new Date().toISOString().slice(11,19)} UTC`);
+      }, 1200);
+    } else {
+      // Setups-mode pipeline output (original)
+      pipeAddStep(5,'◈','DECISION ENGINE OUTPUT','info',
+        `<div style="margin-bottom:4px">
+           <span class="pipe-badge green">${highPriority} HIGH PRIORITY ≥80</span>
+           <span class="pipe-badge amber">${watchlist} WATCHLIST 65-79</span>
+           <span class="pipe-badge amber">${breakoutSets} BREAKOUT</span>
+           <span class="pipe-badge red">${squeezeSets} SQUEEZE</span>
+           <span class="pipe-badge blue">${trendSets} TREND CONT.</span>
+           <span class="pipe-badge green">${bullBias} BULL</span>
+           <span class="pipe-badge red">${bearBias} BEAR</span>
+           · <span class="hl">${new Date().toISOString().slice(11,19)} UTC</span>
+         </div>
+         <div style="margin-top:5px;padding-top:5px;border-top:1px solid rgba(255,255,255,0.06);font-size:8px;color:var(--muted);letter-spacing:0.06em">
+           GATE STATS ·
+           <span style="color:var(--red)">${rejected} rejected</span> ·
+           <span style="color:var(--muted)">${failed} fetch fail</span> ·
+           <span style="color:var(--green)">${scanResults.length} passed</span>
+           — pipeline enforced: structure → setup → validate → entry → score
+         </div>
+         <div style="margin-top:4px;font-size:8px;color:var(--muted);letter-spacing:0.06em">
+           REJECTION BREAKDOWN ·
+           <span style="color:var(--red)">${(rejectTally['INVALID_STRUCTURE']||0)+(rejectTally['NO_CLEAN_SETUP']||0)} NO STRUCT/SETUP</span> ·
+           <span style="color:var(--orange)">${(rejectTally['CONTRA_TREND_LONG_IN_DOWNTREND']||0)+(rejectTally['CONTRA_TREND_SHORT_IN_UPTREND']||0)+(rejectTally['BULL_BIAS_BEAR_BOS']||0)+(rejectTally['BEAR_BIAS_BULL_BOS']||0)+(rejectTally['BULL_BIAS_BEAR_TREND']||0)+(rejectTally['BEAR_BIAS_BULL_TREND']||0)+(rejectTally['BULL_BIAS_IN_TREND_DOWN']||0)+(rejectTally['BEAR_BIAS_IN_TREND_UP']||0)} CONTRA-TREND</span> ·
+           <span style="color:var(--gold)">${rejectTally['LATE_ENTRY_REJECTED']||0} LATE ENTRY</span> ·
+           <span style="color:var(--muted)">${(rejectTally['NO_VOLATILITY']||0)+(rejectTally['DEAD_MARKET']||0)} LOW VOL</span> ·
+           <span style="color:var(--muted)">${(rejectTally['BULL_IN_PREMIUM_NO_PULLBACK']||0)+(rejectTally['BEAR_IN_DISCOUNT_NO_PULLBACK']||0)} PREMIUM/DISCOUNT</span> ·
+           <span style="color:var(--muted)">${rejectTally['SCORE_BELOW_THRESHOLD']||0} LOW SCORE</span>
+         </div>
+         <div style="margin-top:4px;font-size:8px;color:var(--muted);letter-spacing:0.06em">
+           LIQUIDITY BREAKDOWN ·
+           <span style="color:var(--green)">${reasonTally.VALID_SETUP||0} VALID SETUP</span> ·
+           <span style="color:var(--gold)">${reasonTally.SWEEP_NO_BOS||0} SWEEP/NO BOS</span> ·
+           <span style="color:var(--blue)">${reasonTally.INDUCEMENT_ONLY||0} INDUCEMENT</span> ·
+           <span style="color:var(--muted)">${(reasonTally.NO_STRUCTURE||0)+(reasonTally.STRUCTURE_NO_LIQUIDITY||0)} NO STRUCT</span>
+         </div>`,'pipe-s5');
+      setTimeout(() => {
+        pipeCollapse(`✓ SCAN COMPLETE · ${scanResults.length} passed · ${highPriority} HIGH PRIORITY · ${watchlist} WATCHLIST · ${rejected} rejected · ${tf.toUpperCase()} · ${new Date().toISOString().slice(11,19)} UTC`);
+      }, 1200);
+    }
 
     document.getElementById('stat-scanned').textContent=afterBias.length;
     document.getElementById('stat-valid').textContent=scanResults.length;
-    document.getElementById('stat-high').textContent=highPriority;
+    const _highCount = _scanMode === 'radar'
+      ? scanResults.filter(r=>r.score>=70).length
+      : highPriority;
+    document.getElementById('stat-high').textContent=_highCount;
+    const _highLabel = document.getElementById('stat-high-label');
+    if (_highLabel) _highLabel.firstChild.textContent = (_scanMode==='radar' ? 'HIGH ENERGY ' : 'HIGH PRIORITY ');
     document.getElementById('stat-tf').textContent=tf.toUpperCase();
     document.getElementById('stat-time').textContent=new Date().toISOString().slice(11,19)+' UTC';
     document.getElementById('scanner-stats').style.display='flex';
@@ -5129,13 +5165,29 @@ function renderHeatmap(results) {
         tt.style.top=(e.clientY-10)+'px';
         tt.classList.add('show');
         document.getElementById('ht-sym').textContent=coin.symbol;
-        document.getElementById('ht-score').textContent=coin.score + (coin.score>=80?' ★':'');
-        document.getElementById('ht-class').textContent=coin.classification;
-        document.getElementById('ht-state').textContent=(coin.structureType||coin.marketState||'—').toUpperCase();
-        document.getElementById('ht-bias').textContent=coin.bias.toUpperCase();
+        document.getElementById('ht-score').textContent=coin.score + (coin.score>=70&&_scanMode==='radar'?' ⚡':coin.score>=80?' ★':'');
+        document.getElementById('ht-class').textContent=coin.classification||coin.signal||'—';
+        if (_scanMode === 'radar') {
+          document.getElementById('ht-state').textContent='RADAR';
+          document.getElementById('ht-bias').textContent=[
+            coin.comprScore!=null?'C:'+coin.comprScore:'',
+            coin.liqScore!=null?'L:'+coin.liqScore:'',
+            coin.derivScore!=null?'D:'+coin.derivScore:'',
+            coin.volScore!=null?'V:'+coin.volScore:'',
+          ].filter(Boolean).join(' · ');
+        } else {
+          document.getElementById('ht-state').textContent=(coin.structureType||coin.marketState||'—').toUpperCase();
+          document.getElementById('ht-bias').textContent=coin.bias.toUpperCase();
+        }
         document.getElementById('ht-vol').textContent=fmtCompact(coin.vol);
         const rcEl = document.getElementById('ht-rc');
-        if (rcEl) rcEl.textContent = (coin.setupType ? coin.setupType.toUpperCase()+' · ' : '') + (coin.entryQuality||'');
+        if (rcEl) {
+          if (_scanMode === 'radar') {
+            rcEl.textContent = (coin.tags||[]).map(t=>t.label||t).join(' · ') || '—';
+          } else {
+            rcEl.textContent = (coin.setupType ? coin.setupType.toUpperCase()+' · ' : '') + (coin.entryQuality||'');
+          }
+        }
       });
       block.addEventListener('mouseleave', () => {
         document.getElementById('heatmap-tooltip').classList.remove('show');
@@ -5167,56 +5219,96 @@ function renderRankedList(results) {
   }
 
   results.slice(0, 80).forEach((coin, idx) => {
-    // New tiering: HIGH_PRIORITY ≥80, WATCHLIST 65-79 (IGNORE filtered out already)
-    const isHigh   = coin.score >= 80;
-    const isMid    = coin.score >= 65 && coin.score < 80;
+    const isRadar = coin.classType === 'radar';
+
+    // Tiering
+    const highThr  = isRadar ? 70 : 80;
+    const midThr   = isRadar ? 50 : 65;
+    const isHigh   = coin.score >= highThr;
+    const isMid    = coin.score >= midThr && coin.score < highThr;
     const scoreColor = isHigh ? 'var(--green)' : isMid ? 'var(--gold)' : 'var(--sub)';
     const barColor   = isHigh ? '#00e676'       : isMid ? '#ffd54f'    : '#5a6470';
     const tier       = isHigh ? 'high'          : isMid ? 'mid'        : 'low';
-    const tierLabel  = isHigh ? 'HIGH PRIORITY' : 'WATCHLIST';
+    const tierLabel  = isRadar
+      ? (isHigh ? '⚡ HIGH ENERGY' : '◎ BUILDING')
+      : (isHigh ? 'HIGH PRIORITY' : 'WATCHLIST');
     const tierBgCol  = isHigh ? 'rgba(0,230,118,0.12)' : 'rgba(255,213,79,0.10)';
     const tierTxtCol = isHigh ? 'var(--green)' : 'var(--gold)';
 
-    // Reason code badge
-    const rcColor = UI.reasonBadgeColor(coin.reasonCode);
-    const rcLabel = coin.reasonCode || 'UNKNOWN';
-    const sweepBadge = coin.sweepDetected ? `<span class="scan-tag liquidity" style="background:rgba(0,230,118,0.15);color:var(--green);border:1px solid rgba(0,230,118,0.3)">⚡ LIQ SWEEP</span>` : '';
-    const validBadge = coin.validSetup    ? `<span class="scan-tag structure" style="background:rgba(0,230,118,0.1);color:var(--green)">✓ VALID SETUP</span>` : '';
-    // Structure + Setup type badges (new pipeline outputs)
-    const stBadge = coin.structureType ? `<span class="scan-tag neutral" style="color:var(--blue);border-color:rgba(64,196,255,0.25)">◈ ${coin.structureType.toUpperCase()}</span>` : '';
-    const spBadge = coin.setupType && coin.setupType !== 'none' ? `<span class="scan-tag ${coin.setupType==='breakout'?'breakout':coin.setupType==='reversal'?'squeeze':'trend'}">${coin.setupType.toUpperCase()}</span>` : '';
-
     const card = document.createElement('div');
     card.className = `coin-card tier-${tier}`;
-    card.innerHTML = `
-      <div class="coin-score-bar"><div class="coin-score-fill" style="width:${coin.score}%;background:${barColor}"></div></div>
-      <div class="coin-card-top">
-        <div class="coin-left">
-          <div class="rank-badge ${idx<3?'top3':''}">${idx+1}</div>
-          <div class="coin-sym">${coin.symbol}</div>
-          <span class="coin-state-badge state-${coin.marketState||''}">${coin.marketState||'—'}</span>
-          <span class="coin-class-badge class-${coin.classType}">${coin.classification}</span>
-        </div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
-          <div class="coin-score-block">
-            <div class="coin-score-num" style="color:${scoreColor}">${coin.score}</div>
-            <div class="coin-score-label">SCORE</div>
+
+    if (isRadar) {
+      // ── RADAR CARD ────────────────────────────────────────────
+      const signalColor = coin.signal==='TIGHT COIL'||coin.signal==='COIL + LIQ' ? 'var(--green)'
+        : coin.signal==='SQUEEZE BUILD' ? 'var(--red)'
+        : coin.signal==='LIQ MAGNET'    ? 'var(--blue)'
+        : 'var(--gold)';
+      card.innerHTML = `
+        <div class="coin-score-bar"><div class="coin-score-fill" style="width:${coin.score}%;background:${barColor}"></div></div>
+        <div class="coin-card-top">
+          <div class="coin-left">
+            <div class="rank-badge ${idx<3?'top3':''}">${idx+1}</div>
+            <div class="coin-sym">${coin.symbol}</div>
+            <span class="coin-class-badge" style="background:rgba(255,213,79,0.1);color:${signalColor};border-color:${signalColor}33">⚡ ${coin.signal||'WATCH'}</span>
           </div>
-          <div style="font-size:7px;padding:1px 5px;background:${tierBgCol};color:${tierTxtCol};letter-spacing:0.1em">${tierLabel}</div>
-          <div style="font-size:7px;color:${rcColor};letter-spacing:0.08em;text-align:right">${rcLabel.replace(/_/g,' ')}</div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+            <div class="coin-score-block">
+              <div class="coin-score-num" style="color:${scoreColor}">${coin.score}</div>
+              <div class="coin-score-label">ENERGY</div>
+            </div>
+            <div style="font-size:7px;padding:1px 5px;background:${tierBgCol};color:${tierTxtCol};letter-spacing:0.1em">${tierLabel}</div>
+          </div>
         </div>
-      </div>
-      <div class="coin-tags">${sweepBadge}${validBadge}${stBadge}${spBadge}${coin.tags.map(t=>`<span class="scan-tag ${t.type}">${t.label}</span>`).join('')}</div>
-      <div class="coin-explanation">${coin.explanation}</div>
-      <div class="coin-meta">
-        <div class="coin-meta-item">ER:<span class="coin-meta-val">${(coin.er||0).toFixed(2)}</span></div>
-        <div class="coin-meta-item">TQI:<span class="coin-meta-val">${(coin.tqi||0).toFixed(2)}</span></div>
-        <div class="coin-meta-item">FUND:<span class="coin-meta-val ${(coin.funding||0)>0.05?'down':(coin.funding||0)<-0.02?'up':''}">${(coin.funding||0).toFixed(3)}%</span></div>
-        <div class="coin-meta-item">L/S:<span class="coin-meta-val">${(coin.lsRatio||1).toFixed(2)}</span></div>
-        <div class="coin-meta-item">VOL:<span class="coin-meta-val">${fmtCompact(coin.vol)}</span></div>
-        <div class="coin-meta-item">BIAS:<span class="coin-meta-val ${coin.bias.includes('bull')?'up':coin.bias.includes('bear')?'down':''}">${coin.bias.toUpperCase()}</span></div>
-        <div class="coin-meta-item">ENTRY:<span class="coin-meta-val" style="color:${coin.entryQuality==='EARLY'?'var(--green)':coin.entryQuality==='LATE'?'var(--red)':'var(--gold)'}">${coin.entryQuality||'—'}</span></div>
-      </div>`;
+        <div class="coin-tags">${(coin.tags||[]).map(t=>`<span class="scan-tag ${t.type||'neutral'}">${t.label}</span>`).join('')}</div>
+        <div class="coin-explanation">${coin.explanation||'—'}</div>
+        <div class="coin-meta">
+          <div class="coin-meta-item">COMPR:<span class="coin-meta-val" style="color:var(--green)">${coin.comprScore||0}</span></div>
+          <div class="coin-meta-item">LIQ:<span class="coin-meta-val" style="color:var(--blue)">${coin.liqScore||0}</span></div>
+          <div class="coin-meta-item">DERIV:<span class="coin-meta-val" style="color:var(--gold)">${coin.derivScore||0}</span></div>
+          <div class="coin-meta-item">VOL:<span class="coin-meta-val">${coin.volScore||0}</span></div>
+          <div class="coin-meta-item">ER:<span class="coin-meta-val">${(coin.er||0).toFixed(2)}</span></div>
+          <div class="coin-meta-item">FUND:<span class="coin-meta-val ${(coin.funding||0)>0.05?'down':(coin.funding||0)<-0.02?'up':''}">${(coin.funding||0).toFixed(3)}%</span></div>
+          <div class="coin-meta-item">VOL$:<span class="coin-meta-val">${fmtCompact(coin.vol)}</span></div>
+        </div>`;
+    } else {
+      // ── SETUPS CARD (original) ────────────────────────────────
+      const rcColor = UI.reasonBadgeColor(coin.reasonCode);
+      const rcLabel = coin.reasonCode || 'UNKNOWN';
+      const sweepBadge = coin.sweepDetected ? `<span class="scan-tag liquidity" style="background:rgba(0,230,118,0.15);color:var(--green);border:1px solid rgba(0,230,118,0.3)">⚡ LIQ SWEEP</span>` : '';
+      const validBadge = coin.validSetup    ? `<span class="scan-tag structure" style="background:rgba(0,230,118,0.1);color:var(--green)">✓ VALID SETUP</span>` : '';
+      const stBadge = coin.structureType ? `<span class="scan-tag neutral" style="color:var(--blue);border-color:rgba(64,196,255,0.25)">◈ ${coin.structureType.toUpperCase()}</span>` : '';
+      const spBadge = coin.setupType && coin.setupType !== 'none' ? `<span class="scan-tag ${coin.setupType==='breakout'?'breakout':coin.setupType==='reversal'?'squeeze':'trend'}">${coin.setupType.toUpperCase()}</span>` : '';
+      card.innerHTML = `
+        <div class="coin-score-bar"><div class="coin-score-fill" style="width:${coin.score}%;background:${barColor}"></div></div>
+        <div class="coin-card-top">
+          <div class="coin-left">
+            <div class="rank-badge ${idx<3?'top3':''}">${idx+1}</div>
+            <div class="coin-sym">${coin.symbol}</div>
+            <span class="coin-state-badge state-${coin.marketState||''}">${coin.marketState||'—'}</span>
+            <span class="coin-class-badge class-${coin.classType}">${coin.classification}</span>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+            <div class="coin-score-block">
+              <div class="coin-score-num" style="color:${scoreColor}">${coin.score}</div>
+              <div class="coin-score-label">SCORE</div>
+            </div>
+            <div style="font-size:7px;padding:1px 5px;background:${tierBgCol};color:${tierTxtCol};letter-spacing:0.1em">${tierLabel}</div>
+            <div style="font-size:7px;color:${rcColor};letter-spacing:0.08em;text-align:right">${rcLabel.replace(/_/g,' ')}</div>
+          </div>
+        </div>
+        <div class="coin-tags">${sweepBadge}${validBadge}${stBadge}${spBadge}${coin.tags.map(t=>`<span class="scan-tag ${t.type}">${t.label}</span>`).join('')}</div>
+        <div class="coin-explanation">${coin.explanation}</div>
+        <div class="coin-meta">
+          <div class="coin-meta-item">ER:<span class="coin-meta-val">${(coin.er||0).toFixed(2)}</span></div>
+          <div class="coin-meta-item">TQI:<span class="coin-meta-val">${(coin.tqi||0).toFixed(2)}</span></div>
+          <div class="coin-meta-item">FUND:<span class="coin-meta-val ${(coin.funding||0)>0.05?'down':(coin.funding||0)<-0.02?'up':''}">${(coin.funding||0).toFixed(3)}%</span></div>
+          <div class="coin-meta-item">L/S:<span class="coin-meta-val">${(coin.lsRatio||1).toFixed(2)}</span></div>
+          <div class="coin-meta-item">VOL:<span class="coin-meta-val">${fmtCompact(coin.vol)}</span></div>
+          <div class="coin-meta-item">BIAS:<span class="coin-meta-val ${coin.bias.includes('bull')?'up':coin.bias.includes('bear')?'down':''}">${coin.bias.toUpperCase()}</span></div>
+          <div class="coin-meta-item">ENTRY:<span class="coin-meta-val" style="color:${coin.entryQuality==='EARLY'?'var(--green)':coin.entryQuality==='LATE'?'var(--red)':'var(--gold)'}">${coin.entryQuality||'—'}</span></div>
+        </div>`;
+    }
     card.addEventListener('click', () => {
       document.getElementById('tfSelect').value = document.getElementById('scanTfSelect').value;
       switchToAnalysis(coin.symbol);
