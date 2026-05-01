@@ -617,7 +617,7 @@ body{
   transition:max-height 0.3s cubic-bezier(0.22,1,0.36,1);
   max-height:0;
 }
-#heatmap-guide.open{ max-height:900px; }
+#heatmap-guide.open{ max-height:2400px; }
 .hg-inner{
   padding:14px 16px 16px;
   display:grid;
@@ -1055,6 +1055,7 @@ body{
   transition:filter 0.15s,transform 0.1s;
   border:1px solid rgba(0,0,0,0.4);
   box-sizing:border-box;
+  padding:2px 3px;
 }
 .heatmap-block:hover{
   filter:brightness(1.2);
@@ -1066,10 +1067,16 @@ body{
   font-weight:700;color:#fff;
   text-shadow:0 1px 3px rgba(0,0,0,0.6);
   pointer-events:none;line-height:1;
+  white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;
+  max-width:100%;
+  text-align:center;
 }
 .heatmap-block-score{
   font-family:var(--font-mono);color:rgba(255,255,255,0.75);
   pointer-events:none;margin-top:2px;
+  line-height:1;
+  white-space:nowrap;
 }
 .heatmap-tooltip{
   position:fixed;
@@ -1711,137 +1718,200 @@ body{
     <!-- Heatmap Reading Guide -->
     <div id="heatmap-guide">
       <div class="hg-inner">
-        <div class="hg-group-title">How to read this page</div>
+
+        <div class="hg-group-title">📐 Block Shapes — What They Mean</div>
+
+        <div class="hg-item">
+          <div class="hg-swatch" style="width:64px;height:36px;background:rgba(0,230,118,0.5);border:1px solid rgba(0,230,118,0.4);flex-shrink:0"></div>
+          <div class="hg-text">
+            <div class="hg-label">Wide rectangle</div>
+            <div class="hg-desc"><strong>High trading volume.</strong> This coin trades a lot of money every day — the market is very liquid. Wide blocks are safer to trade: tighter spreads, cleaner entries and exits. <strong>Always prioritise wide blocks over narrow ones when score is equal.</strong></div>
+          </div>
+        </div>
+
+        <div class="hg-item">
+          <div class="hg-swatch" style="width:20px;height:36px;background:rgba(0,230,118,0.5);border:1px solid rgba(0,230,118,0.4);flex-shrink:0"></div>
+          <div class="hg-text">
+            <div class="hg-label">Narrow / tall block</div>
+            <div class="hg-desc"><strong>Lower trading volume.</strong> Thinner market — can move fast but harder to exit cleanly. A high score on a narrow block is interesting but riskier. Hover to check VOL$ before acting.</div>
+          </div>
+        </div>
+
+        <div class="hg-item">
+          <div class="hg-swatch" style="width:36px;height:36px;background:rgba(0,230,118,0.5);border:1px solid rgba(0,230,118,0.4);flex-shrink:0"></div>
+          <div class="hg-text">
+            <div class="hg-label">Square block</div>
+            <div class="hg-desc"><strong>Medium volume — balanced.</strong> Volume is proportional to its row. Score and color are what matter here.</div>
+          </div>
+        </div>
+
+        <div class="hg-item">
+          <div class="hg-swatch" style="width:64px;height:20px;background:rgba(0,230,118,0.35);border:1px solid rgba(0,230,118,0.3);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:7px;color:rgba(255,255,255,0.4)">no text</div>
+          <div class="hg-text">
+            <div class="hg-label">Block with no text</div>
+            <div class="hg-desc"><strong>Too small to display the coin name cleanly.</strong> The coin still has a score and signal. <strong>Hover over it</strong> to see full details in the tooltip. Never ignore a brightly colored small block — always hover first.</div>
+          </div>
+        </div>
+
+        <div class="hg-item">
+          <div class="hg-swatch" style="background:rgba(0,230,118,0.9);border:1px solid rgba(0,230,118,0.6)"></div>
+          <div class="hg-text">
+            <div class="hg-label">Bright vs dim color</div>
+            <div class="hg-desc"><strong>Brightness = signal strength.</strong> Vivid bright green = high score + strong signal. Dull muted green = low score, weaker signal. Bright = worth acting on. Dim = watch only.</div>
+          </div>
+        </div>
+
+        <div class="hg-group-title" style="margin-top:8px">🎨 Colors — What They Mean</div>
 
         <div class="hg-item">
           <div class="hg-swatch" style="background:rgba(0,230,118,0.8)"></div>
           <div class="hg-text">
-            <div class="hg-label">Green block</div>
-            <div class="hg-desc">This coin is showing <strong>bullish signs</strong> — buyers are in control. The brighter the green, the stronger the signal.</div>
+            <div class="hg-label" style="color:var(--green)">Green — Bullish / Bull Lean</div>
+            <div class="hg-desc"><strong>Setups mode:</strong> structure confirmed, buyers in control, valid long setup. <strong>Radar mode:</strong> bull pressure building — coin may pump, but not yet confirmed. Brighter = stronger signal.</div>
           </div>
         </div>
 
         <div class="hg-item">
           <div class="hg-swatch" style="background:rgba(255,60,60,0.8)"></div>
           <div class="hg-text">
-            <div class="hg-label">Red block</div>
-            <div class="hg-desc">This coin is showing <strong>bearish signs</strong> — sellers are in control. Brighter red = stronger sell signal.</div>
+            <div class="hg-label" style="color:var(--red)">Red — Bearish / Bear Lean</div>
+            <div class="hg-desc"><strong>Setups mode:</strong> structure confirmed, sellers in control, valid short setup. <strong>Radar mode:</strong> bear pressure building — coin may dump, but not yet confirmed. Brighter = stronger signal.</div>
           </div>
         </div>
 
         <div class="hg-item">
           <div class="hg-swatch" style="background:rgba(255,213,79,0.8)"></div>
           <div class="hg-text">
-            <div class="hg-label">Gold / Yellow block</div>
-            <div class="hg-desc">Direction is <strong>mixed or unclear</strong>. No strong signal either way — best to wait and watch.</div>
+            <div class="hg-label" style="color:var(--gold)">Gold — Neutral / Mixed</div>
+            <div class="hg-desc">Direction is unclear or conflicting. <strong>Do not trade gold blocks without deeper analysis.</strong> Hover to see what's building, then check the Analysis page for clarity.</div>
           </div>
         </div>
 
+        <div class="hg-group-title" style="margin-top:8px">📊 Score — What It Means</div>
+
         <div class="hg-item">
-          <div class="hg-swatch" style="background:var(--bg4);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--text)">▲</div>
+          <div class="hg-swatch" style="background:var(--bg4);border:1px solid var(--green);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--green);font-weight:700">85+</div>
           <div class="hg-text">
-            <div class="hg-label">▲ Arrow up (bottom-right)</div>
-            <div class="hg-desc">Bullish direction confirmed — the analysis points to a potential <strong>price rise</strong>.</div>
+            <div class="hg-label" style="color:var(--green)">80–100 — Priority</div>
+            <div class="hg-desc">Strong signal, multiple factors aligned. Click through to Analysis immediately. In Setups = confirmed setup. In Radar = burst likely imminent.</div>
           </div>
         </div>
 
         <div class="hg-item">
-          <div class="hg-swatch" style="background:var(--bg4);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--text)">▼</div>
+          <div class="hg-swatch" style="background:var(--bg4);border:1px solid var(--gold);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--gold);font-weight:700">70</div>
           <div class="hg-text">
-            <div class="hg-label">▼ Arrow down (bottom-right)</div>
-            <div class="hg-desc">Bearish direction confirmed — the analysis points to a potential <strong>price drop</strong>.</div>
+            <div class="hg-label" style="color:var(--gold)">60–79 — Watchlist</div>
+            <div class="hg-desc">Moderate signal, conditions building. Add to watchlist and revisit next candle close. Do not enter yet.</div>
           </div>
         </div>
 
         <div class="hg-item">
-          <div class="hg-swatch" style="font-size:14px;display:flex;align-items:center;justify-content:center">⬜</div>
+          <div class="hg-swatch" style="background:var(--bg4);border:1px solid var(--muted);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--muted);font-weight:700">50</div>
           <div class="hg-text">
-            <div class="hg-label">Block size = Trading volume</div>
-            <div class="hg-desc">A <strong>bigger block</strong> means more money is being traded in that coin in the last 24 hours. Bigger = more active market.</div>
+            <div class="hg-label">Below 60 — Skip</div>
+            <div class="hg-desc">Weak signal. Not enough evidence. Move on — better opportunities are higher in the list.</div>
           </div>
         </div>
 
+        <div class="hg-group-title" style="margin-top:8px">⚡ Icons on Blocks</div>
+
         <div class="hg-item">
-          <div class="hg-swatch" style="background:var(--bg4);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--gold);font-weight:700">70</div>
+          <div class="hg-swatch" style="background:var(--bg4);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:13px">▲</div>
           <div class="hg-text">
-            <div class="hg-label">Number = Score (0–100)</div>
-            <div class="hg-desc">How strong the signal is. <strong>70+ is strong</strong>, 50–69 is moderate, below 50 is weak. Higher = more reasons to act.</div>
+            <div class="hg-label">▲ Arrow up</div>
+            <div class="hg-desc">Bullish direction detected. Setups = confirmed. Radar = likely direction.</div>
           </div>
         </div>
 
         <div class="hg-item">
-          <div class="hg-swatch" style="background:var(--bg4);border:1px solid var(--border2)"></div>
+          <div class="hg-swatch" style="background:var(--bg4);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:13px">▼</div>
           <div class="hg-text">
-            <div class="hg-label">Filters (top bar)</div>
-            <div class="hg-desc"><strong>ALL</strong> = show everything. <strong>BREAKOUT</strong> = coins trying to break through a price wall. <strong>SQUEEZE</strong> = coins that have been ranging and may explode. <strong>TREND</strong> = coins already moving strongly in one direction.</div>
+            <div class="hg-label">▼ Arrow down</div>
+            <div class="hg-desc">Bearish direction detected. Setups = confirmed. Radar = likely direction.</div>
           </div>
         </div>
 
-        <div class="hg-group-title" style="margin-top:6px">Market Classification Badges</div>
-
         <div class="hg-item">
-          <div class="hg-swatch" style="background:var(--blue-dim);border:1px solid rgba(64,196,255,0.3);display:flex;align-items:center;justify-content:center;font-size:7px;color:var(--blue);font-weight:700;letter-spacing:0.06em">BRK</div>
+          <div class="hg-swatch" style="background:var(--bg4);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:13px">◆</div>
           <div class="hg-text">
-            <div class="hg-label" style="color:var(--blue)">BREAKOUT</div>
-            <div class="hg-desc">Price is pushing through a key resistance or support level it previously could not pass. Signals the start of a strong directional move. <strong>Act fast — breakouts can move quickly.</strong></div>
+            <div class="hg-label">◆ Diamond</div>
+            <div class="hg-desc">No directional lean. Mixed signals. Wait for more clarity.</div>
           </div>
         </div>
 
-        <div class="hg-item">
-          <div class="hg-swatch" style="background:var(--red-dim);border:1px solid rgba(255,68,68,0.3);display:flex;align-items:center;justify-content:center;font-size:7px;color:var(--red);font-weight:700;letter-spacing:0.06em">SQZ</div>
+        <div class="hg-group-title" style="margin-top:8px">✅ After Scanning — Step By Step</div>
+
+        <div class="hg-item" style="background:rgba(0,230,118,0.04);border:1px solid rgba(0,230,118,0.15);padding:6px 8px">
+          <div class="hg-swatch" style="background:rgba(0,230,118,0.2);border:1px solid rgba(0,230,118,0.4);display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--green);font-weight:800">1</div>
           <div class="hg-text">
-            <div class="hg-label" style="color:var(--red)">SQUEEZE</div>
-            <div class="hg-desc">Price has been coiling sideways in a tight range — like a compressed spring. Volatility is low now but a big move is building. <strong>Direction is not yet confirmed — wait for a clear breakout before entering.</strong></div>
+            <div class="hg-label" style="color:var(--green)">Find the biggest, brightest blocks</div>
+            <div class="hg-desc">Start top-left — highest-scored, highest-volume coins first. Wide + bright + score 80+ = your best candidates. Ignore dim and tiny blocks on first pass.</div>
           </div>
         </div>
 
-        <div class="hg-item">
-          <div class="hg-swatch" style="background:var(--green-dim);border:1px solid rgba(0,230,118,0.3);display:flex;align-items:center;justify-content:center;font-size:7px;color:var(--green);font-weight:700;letter-spacing:0.06em">TRD</div>
+        <div class="hg-item" style="background:rgba(0,230,118,0.04);border:1px solid rgba(0,230,118,0.15);padding:6px 8px">
+          <div class="hg-swatch" style="background:rgba(0,230,118,0.2);border:1px solid rgba(0,230,118,0.4);display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--green);font-weight:800">2</div>
           <div class="hg-text">
-            <div class="hg-label" style="color:var(--green)">TREND CONTINUATION</div>
-            <div class="hg-desc">This coin is already in a clean, established trend (up or down). The signal is to ride the existing momentum. <strong>Highest reliability — trade in the direction of the trend only.</strong></div>
+            <div class="hg-label" style="color:var(--green)">Hover each candidate</div>
+            <div class="hg-desc">The tooltip shows SCORE, SIGNAL TYPE, MARKET STATE, DIRECTION, and pillar breakdown. TRIGGER ZONE or MOM SHIFT in Radar = urgent. EXPANSION in Setups = possibly late.</div>
           </div>
         </div>
 
-        <div class="hg-group-title" style="margin-top:6px">Market State Badges (on Ranked cards)</div>
+        <div class="hg-item" style="background:rgba(0,230,118,0.04);border:1px solid rgba(0,230,118,0.15);padding:6px 8px">
+          <div class="hg-swatch" style="background:rgba(0,230,118,0.2);border:1px solid rgba(0,230,118,0.4);display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--green);font-weight:800">3</div>
+          <div class="hg-text">
+            <div class="hg-label" style="color:var(--green)">Switch to Ranked view</div>
+            <div class="hg-desc">Click ≡ RANKED. Each card shows Entry Quality (EARLY / OK / LATE) and a full explanation. <strong>Only take EARLY or OK entries.</strong> LATE = skip, the move is already done.</div>
+          </div>
+        </div>
+
+        <div class="hg-item" style="background:rgba(0,230,118,0.04);border:1px solid rgba(0,230,118,0.15);padding:6px 8px">
+          <div class="hg-swatch" style="background:rgba(0,230,118,0.2);border:1px solid rgba(0,230,118,0.4);display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--green);font-weight:800">4</div>
+          <div class="hg-text">
+            <div class="hg-label" style="color:var(--green)">Click the coin → run full Analysis</div>
+            <div class="hg-desc">Mandatory. The heatmap shortlists — the Analysis page confirms. Check Trade Scenarios for entry zone, stop loss, and take profit. <strong>If Analysis disagrees with the scanner, trust Analysis.</strong></div>
+          </div>
+        </div>
+
+        <div class="hg-item" style="background:rgba(255,213,79,0.04);border:1px solid rgba(255,213,79,0.15);padding:6px 8px">
+          <div class="hg-swatch" style="background:rgba(255,213,79,0.2);border:1px solid rgba(255,213,79,0.4);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--gold);font-weight:800">⚠</div>
+          <div class="hg-text">
+            <div class="hg-label" style="color:var(--gold)">Radar mode — extra step</div>
+            <div class="hg-desc">Green/red in Radar is a lean, not a confirmed signal. After Analysis, also run a Setups scan. <strong>Both scanners agreeing = highest conviction.</strong> If they disagree — wait.</div>
+          </div>
+        </div>
+
+        <div class="hg-group-title" style="margin-top:8px">Market State Badges (Setups Mode)</div>
 
         <div class="hg-item">
-          <div class="hg-swatch" style="background:var(--green-dim);border:1px solid rgba(0,230,118,0.25);display:flex;align-items:center;justify-content:center;font-size:6px;color:var(--green);font-weight:700;letter-spacing:0.05em">TRD</div>
+          <div class="hg-swatch" style="background:var(--green-dim);border:1px solid rgba(0,230,118,0.3);display:flex;align-items:center;justify-content:center;font-size:7px;color:var(--green);font-weight:700">TRD</div>
           <div class="hg-text">
             <div class="hg-label" style="color:var(--green)">TREND</div>
-            <div class="hg-desc">Price is moving cleanly in one direction with consistent higher-highs (up) or lower-lows (down). Supertrend and structure agree. Strong conditions for momentum trades.</div>
+            <div class="hg-desc">Clean directional move. Highest reliability. Trade in the trend direction only.</div>
           </div>
         </div>
 
         <div class="hg-item">
-          <div class="hg-swatch" style="background:var(--gold-dim);border:1px solid rgba(255,213,79,0.25);display:flex;align-items:center;justify-content:center;font-size:6px;color:var(--gold);font-weight:700;letter-spacing:0.05em">RNG</div>
+          <div class="hg-swatch" style="background:var(--gold-dim);border:1px solid rgba(255,213,79,0.3);display:flex;align-items:center;justify-content:center;font-size:7px;color:var(--gold);font-weight:700">RNG</div>
           <div class="hg-text">
             <div class="hg-label" style="color:var(--gold)">RANGE</div>
-            <div class="hg-desc">Price is bouncing between a ceiling (resistance) and a floor (support) without breaking either. No clear direction — wait for a breakout, or trade the range boundaries if you're experienced.</div>
+            <div class="hg-desc">Bouncing between support and resistance. Only valid with a liquidity sweep. Otherwise wait for breakout.</div>
           </div>
         </div>
 
         <div class="hg-item">
-          <div class="hg-swatch" style="background:rgba(255,144,64,0.12);border:1px solid rgba(255,144,64,0.25);display:flex;align-items:center;justify-content:center;font-size:6px;color:var(--orange);font-weight:700;letter-spacing:0.05em">TRN</div>
+          <div class="hg-swatch" style="background:rgba(255,144,64,0.12);border:1px solid rgba(255,144,64,0.3);display:flex;align-items:center;justify-content:center;font-size:7px;color:var(--orange);font-weight:700">TRN</div>
           <div class="hg-text">
             <div class="hg-label" style="color:var(--orange)">TRANSITION</div>
-            <div class="hg-desc">The market just broke structure (BOS or CHoCH) and may be switching direction. A trend could be starting — but it's not confirmed yet. <strong>Higher risk — wait for follow-through before committing.</strong></div>
+            <div class="hg-desc">Structure just broke — direction may be flipping. High potential, high risk. Wait for one confirmation candle.</div>
           </div>
         </div>
 
         <div class="hg-item">
-          <div class="hg-swatch" style="background:var(--blue-dim);border:1px solid rgba(64,196,255,0.25);display:flex;align-items:center;justify-content:center;font-size:6px;color:var(--blue);font-weight:700;letter-spacing:0.05em">EXP</div>
+          <div class="hg-swatch" style="background:var(--blue-dim);border:1px solid rgba(64,196,255,0.3);display:flex;align-items:center;justify-content:center;font-size:7px;color:var(--blue);font-weight:700">EXP</div>
           <div class="hg-text">
             <div class="hg-label" style="color:var(--blue)">EXPANSION</div>
-            <div class="hg-desc">Price broke out of a range and is now moving fast and far in one direction — a full expansion move is underway. Strong momentum, but <strong>entering late in expansion is risky</strong> — the move may be nearly done.</div>
-          </div>
-        </div>
-
-        <div class="hg-item">
-          <div class="hg-swatch" style="background:var(--bg4);border:1px solid var(--border2)"></div>
-          <div class="hg-text">
-            <div class="hg-label">Click any block</div>
-            <div class="hg-desc">Clicking a coin opens the <strong>full analysis page</strong> for that coin — entry price, stop loss, targets, and reasoning.</div>
+            <div class="hg-desc">Move already underway. You may be late. Only enter if score is 85+ and entry quality is EARLY or OK.</div>
           </div>
         </div>
 
@@ -1849,49 +1919,7 @@ body{
           <div class="hg-swatch" style="background:var(--bg4);border:1px solid var(--border2)"></div>
           <div class="hg-text">
             <div class="hg-label">⊞ Heatmap vs ≡ Ranked</div>
-            <div class="hg-desc"><strong>Heatmap</strong> shows all coins visually at once. <strong>Ranked</strong> shows them as a sorted list with more detail per coin.</div>
-          </div>
-        </div>
-
-        <div class="hg-group-title" style="margin-top:6px;color:var(--gold)">⚡ RADAR Mode — Understanding Green &amp; Red</div>
-
-        <div class="hg-item" style="background:rgba(255,213,79,0.04);border:1px solid rgba(255,213,79,0.12);padding:6px 8px">
-          <div class="hg-swatch" style="background:rgba(255,213,79,0.15);border:1px solid rgba(255,213,79,0.4);display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--gold);font-weight:700">⚠</div>
-          <div class="hg-text">
-            <div class="hg-label" style="color:var(--gold)">Radar color ≠ confirmed signal</div>
-            <div class="hg-desc">In Radar mode, <strong style="color:var(--green)">green</strong> means bull pressure is building and the coin may pump. <strong style="color:var(--red)">Red</strong> means bear pressure and the coin may dump. But this is a <strong>lean</strong> — a probability, not a guarantee. The burst direction is unconfirmed until price actually breaks structure. <strong>Never trade from Radar alone.</strong></div>
-          </div>
-        </div>
-
-        <div class="hg-item">
-          <div class="hg-swatch" style="background:rgba(0,230,118,0.25);border:1px solid rgba(0,230,118,0.5)"></div>
-          <div class="hg-text">
-            <div class="hg-label" style="color:var(--green)">Green block (Radar)</div>
-            <div class="hg-desc"><strong>Bull lean detected.</strong> Evidence of upward pressure: funding favours longs, shorts are crowded, price pressing the top of the range, higher lows forming, candles closing bullish. <strong>This coin may pump — but verify first.</strong> Click it → run Analysis → confirm with the Setups scanner before entering.</div>
-          </div>
-        </div>
-
-        <div class="hg-item">
-          <div class="hg-swatch" style="background:rgba(255,68,68,0.25);border:1px solid rgba(255,68,68,0.5)"></div>
-          <div class="hg-text">
-            <div class="hg-label" style="color:var(--red)">Red block (Radar)</div>
-            <div class="hg-desc"><strong>Bear lean detected.</strong> Evidence of downward pressure: funding favours shorts, longs are crowded, price pressing the bottom of the range, lower highs forming, candles closing bearish. <strong>This coin may dump — but verify first.</strong> Click it → run Analysis → confirm before acting.</div>
-          </div>
-        </div>
-
-        <div class="hg-item">
-          <div class="hg-swatch" style="background:rgba(255,213,79,0.25);border:1px solid rgba(255,213,79,0.5)"></div>
-          <div class="hg-text">
-            <div class="hg-label" style="color:var(--gold)">Gold block (Radar)</div>
-            <div class="hg-desc"><strong>No clear lean.</strong> Evidence is mixed — both bull and bear signals present. The coin is coiling and about to move, but direction is genuinely unclear. Wait for a clear breakout or use the Analysis page to dig deeper.</div>
-          </div>
-        </div>
-
-        <div class="hg-item">
-          <div class="hg-swatch" style="background:var(--bg4);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:8px;color:var(--sub)">①②</div>
-          <div class="hg-text">
-            <div class="hg-label">The right workflow</div>
-            <div class="hg-desc"><strong>Step 1:</strong> Use Radar to find coins with high Burst scores and a directional lean. <strong>Step 2:</strong> Click the coin → switch to Analysis. <strong>Step 3:</strong> Run the Setups scanner or full analysis to confirm structure, entry quality, and direction. <strong>Only act after Step 3.</strong> Radar is a watchlist builder, not a trade trigger.</div>
+            <div class="hg-desc"><strong>Heatmap</strong> = fast visual overview. <strong>Ranked</strong> = full detail per coin. Use heatmap to shortlist, ranked to decide.</div>
           </div>
         </div>
 
@@ -5488,7 +5516,13 @@ function renderHeatmap(results) {
       const block = document.createElement('div');
       block.className = 'heatmap-block';
       block.style.cssText = `left:${xOffset}px;top:${yOffset}px;width:${w}px;height:${rowH}px;background:${scoreToColor(coin.score, coin.bias, coin.classType)};`;
-      const fontSize = Math.max(8, Math.min(16, w/6));
+      // Font size: scale to the smaller of width/height so text never overflows
+      const minDim = Math.min(w, rowH);
+      const fontSize = Math.max(7, Math.min(15, minDim / 4.5));
+      const scoreSize = Math.max(6, fontSize - 2);
+      // Hide text entirely on very small blocks — tooltip still works on hover
+      const tooSmallForSym   = w < 36 || rowH < 22;
+      const tooSmallForScore = w < 44 || rowH < 32;
       const isRadarBlock = coin.classType === 'radar';
       const biasIcon = isRadarBlock
         ? (coin.score >= 70 ? '⚡' : coin.score >= 55 ? '◎' : '·')
@@ -5497,9 +5531,9 @@ function renderHeatmap(results) {
         ? (coin.score >= 70 ? 'rgba(255,160,40,0.95)' : coin.score >= 55 ? 'rgba(255,200,80,0.8)' : 'rgba(160,100,40,0.6)')
         : (coin.bias && coin.bias.includes('bull') ? 'rgba(0,230,118,0.9)' : coin.bias && coin.bias.includes('bear') ? 'rgba(255,80,80,0.9)' : 'rgba(255,213,79,0.8)');
       block.innerHTML = `
-        <span class="heatmap-block-sym" style="font-size:${fontSize}px">${coin.symbol}</span>
-        <span class="heatmap-block-score" style="font-size:${Math.max(7,fontSize-2)}px">${coin.score}</span>
-        <span style="font-size:${Math.max(6,fontSize-4)}px;color:${biasIconColor};position:absolute;bottom:4px;right:5px;line-height:1">${biasIcon}</span>`;
+        ${tooSmallForSym ? '' : `<span class="heatmap-block-sym" style="font-size:${fontSize}px;max-width:${w-6}px">${coin.symbol}</span>`}
+        ${tooSmallForScore ? '' : `<span class="heatmap-block-score" style="font-size:${scoreSize}px">${coin.score}</span>`}
+        <span style="font-size:${Math.max(6,fontSize-3)}px;color:${biasIconColor};position:absolute;bottom:3px;right:4px;line-height:1;${tooSmallForSym?'font-size:8px;':''}">${biasIcon}</span>`;
       block.addEventListener('mousemove', e => {
         const tt = document.getElementById('heatmap-tooltip');
         tt.style.left=(e.clientX+12)+'px';
