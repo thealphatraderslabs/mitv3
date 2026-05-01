@@ -4909,12 +4909,8 @@ async function runMarketScan() {
           return;
         }
 
-        // Radar mode: apply score threshold (≥40 — lower bar since no structure gate)
-        if (_scanMode === 'radar' && result.score < 40) {
-          rejected++;
-          rejectTally['RADAR_LOW_SCORE'] = (rejectTally['RADAR_LOW_SCORE'] || 0) + 1;
-          return;
-        }
+        // Radar mode: collect all coins — percentile rescale after loop handles filtering
+        // (pre-filtering before rescale would bias the percentile distribution)
 
         result.symbol = sym;
         result.price  = candles[candles.length-1].close;
@@ -4932,6 +4928,42 @@ async function runMarketScan() {
     if (_scanCancelled) { pipeUpdateStep('pipe-s4','⊘ SCAN CANCELLED','warn','User cancelled.'); return; }
 
     scanResults.sort((a,b)=>b.score-a.score);
+
+    // RADAR PERCENTILE RESCALE
+    // Raw pillar scores cluster in a tight band (50-65) because most of the market
+    // sits in a "moderate" state on any given day. Absolute thresholds have no
+    // discriminating power across timeframes or market regimes.
+    // Fix: percentile-rank each coin's raw score against the full scan population.
+    // Top coin always scores ~95. Bottom coin always scores ~5. Distribution always spreads.
+    // This makes HIGH ENERGY meaningful — it means "most coiled relative to the market today",
+    // not "hit an arbitrary absolute threshold".
+    if (_scanMode === 'radar' && scanResults.length > 1) {
+      const rawScores = scanResults.map(r => r.score);
+      scanResults.forEach((r, idx) => {
+        // percentile = fraction of coins scoring BELOW this coin
+        const below = rawScores.filter(s => s < r.score).length;
+        const pct   = below / (scanResults.length - 1); // 0.0 → 1.0
+        // Map to 5–95 range with a slight curve to push top coins higher
+        r.score = Math.round(5 + pct * 90);
+        // Rescale pillar sub-scores proportionally for display consistency
+        const ratio = rawScores[idx] > 0 ? r.score / rawScores[idx] : 1;
+        if (r.comprScore != null) r.comprScore = Math.min(100, Math.round(r.comprScore * ratio));
+        if (r.liqScore   != null) r.liqScore   = Math.min(100, Math.round(r.liqScore   * ratio));
+        if (r.derivScore != null) r.derivScore = Math.min(100, Math.round(r.derivScore * ratio));
+        if (r.volScore   != null) r.volScore   = Math.min(100, Math.round(r.volScore   * ratio));
+      });
+      // Re-sort after rescale (order preserved but scores now spread 5–95)
+      scanResults.sort((a,b) => b.score - a.score);
+      // Re-assign signal labels based on rescaled scores
+      scanResults.forEach(r => {
+        if (r.score >= 80)      r.signal = r.signal !== 'WATCH' ? r.signal : 'TIGHT COIL';
+        else if (r.score >= 65) r.signal = r.signal !== 'WATCH' ? r.signal : 'WATCH';
+        r.classification = r.signal;
+      });
+      // Keep only top 60 — below that the signal is too weak to act on
+      if (scanResults.length > 60) scanResults.splice(60);
+    }
+
     _scanResults = scanResults;
 
     const highPriority  = scanResults.filter(r=>r.score>=80).length;
@@ -4949,8 +4981,8 @@ async function runMarketScan() {
 
     if (_scanMode === 'radar') {
       // Radar-specific pipeline output
-      const highRadar = scanResults.filter(r=>r.score>=70).length;
-      const midRadar  = scanResults.filter(r=>r.score>=50&&r.score<70).length;
+      const highRadar = scanResults.filter(r=>r.score>=75).length;
+      const midRadar  = scanResults.filter(r=>r.score>=50&&r.score<75).length;
       const coilCount = scanResults.filter(r=>r.signal==='TIGHT COIL'||r.signal==='COIL + LIQ').length;
       const sqzCount  = scanResults.filter(r=>r.signal==='SQUEEZE BUILD').length;
       const liqCount  = scanResults.filter(r=>r.signal==='LIQ MAGNET').length;
@@ -5013,7 +5045,7 @@ async function runMarketScan() {
     document.getElementById('stat-scanned').textContent=afterBias.length;
     document.getElementById('stat-valid').textContent=scanResults.length;
     const _highCount = _scanMode === 'radar'
-      ? scanResults.filter(r=>r.score>=70).length
+      ? scanResults.filter(r=>r.score>=75).length
       : highPriority;
     document.getElementById('stat-high').textContent=_highCount;
     const _highLabel = document.getElementById('stat-high-label');
@@ -5050,7 +5082,7 @@ function getFilteredResults() {
   let r = [..._scanResults];
   if (_scanMode === 'radar') {
     // Radar filters: by energy tier and signal type
-    if (_currentFilter === 'high_priority') r = r.filter(x => x.score >= 70);
+    if (_currentFilter === 'high_priority') r = r.filter(x => x.score >= 75);
     else if (_currentFilter === 'breakout')  r = r.filter(x => x.signal === 'COIL + LIQ' || x.signal === 'TIGHT COIL');
     else if (_currentFilter === 'squeeze')   r = r.filter(x => x.signal === 'SQUEEZE BUILD');
     else if (_currentFilter === 'trend')     r = r.filter(x => x.signal === 'LIQ MAGNET' || x.signal === 'VOL DRY + COIL');
@@ -5281,7 +5313,7 @@ function renderRankedList(results) {
     const isRadar = coin.classType === 'radar';
 
     // Tiering
-    const highThr  = isRadar ? 70 : 80;
+    const highThr  = isRadar ? 75 : 80;
     const midThr   = isRadar ? 50 : 65;
     const isHigh   = coin.score >= highThr;
     const isMid    = coin.score >= midThr && coin.score < highThr;
