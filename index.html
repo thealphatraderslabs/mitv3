@@ -1346,6 +1346,12 @@ body{
   <div class="ht-row"><span class="ht-key">BIAS</span><span class="ht-val" id="ht-bias">—</span></div>
   <div class="ht-row"><span class="ht-key">LIQ</span><span class="ht-val" id="ht-rc" style="color:var(--gold)">—</span></div>
   <div class="ht-row"><span class="ht-key">VOL</span><span class="ht-val" id="ht-vol">—</span></div>
+  <div id="ht-radar-disclaimer" style="display:none;margin-top:6px;padding-top:6px;border-top:1px solid var(--border);font-size:8px;line-height:1.5;color:var(--muted);max-width:220px">
+    <span style="color:var(--gold);font-weight:600">⚠ RADAR MODE</span><br>
+    Color = directional <em>lean</em>, not a confirmed signal.<br>
+    Green = bull pressure detected. Red = bear pressure.<br>
+    <span style="color:var(--sub)">Always verify on the Analysis page before acting.</span>
+  </div>
 </div>
 
 <!-- ══ FIXED HEADER ══ -->
@@ -1844,6 +1850,48 @@ body{
           <div class="hg-text">
             <div class="hg-label">⊞ Heatmap vs ≡ Ranked</div>
             <div class="hg-desc"><strong>Heatmap</strong> shows all coins visually at once. <strong>Ranked</strong> shows them as a sorted list with more detail per coin.</div>
+          </div>
+        </div>
+
+        <div class="hg-group-title" style="margin-top:6px;color:var(--gold)">⚡ RADAR Mode — Understanding Green &amp; Red</div>
+
+        <div class="hg-item" style="background:rgba(255,213,79,0.04);border:1px solid rgba(255,213,79,0.12);padding:6px 8px">
+          <div class="hg-swatch" style="background:rgba(255,213,79,0.15);border:1px solid rgba(255,213,79,0.4);display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--gold);font-weight:700">⚠</div>
+          <div class="hg-text">
+            <div class="hg-label" style="color:var(--gold)">Radar color ≠ confirmed signal</div>
+            <div class="hg-desc">In Radar mode, <strong style="color:var(--green)">green</strong> means bull pressure is building and the coin may pump. <strong style="color:var(--red)">Red</strong> means bear pressure and the coin may dump. But this is a <strong>lean</strong> — a probability, not a guarantee. The burst direction is unconfirmed until price actually breaks structure. <strong>Never trade from Radar alone.</strong></div>
+          </div>
+        </div>
+
+        <div class="hg-item">
+          <div class="hg-swatch" style="background:rgba(0,230,118,0.25);border:1px solid rgba(0,230,118,0.5)"></div>
+          <div class="hg-text">
+            <div class="hg-label" style="color:var(--green)">Green block (Radar)</div>
+            <div class="hg-desc"><strong>Bull lean detected.</strong> Evidence of upward pressure: funding favours longs, shorts are crowded, price pressing the top of the range, higher lows forming, candles closing bullish. <strong>This coin may pump — but verify first.</strong> Click it → run Analysis → confirm with the Setups scanner before entering.</div>
+          </div>
+        </div>
+
+        <div class="hg-item">
+          <div class="hg-swatch" style="background:rgba(255,68,68,0.25);border:1px solid rgba(255,68,68,0.5)"></div>
+          <div class="hg-text">
+            <div class="hg-label" style="color:var(--red)">Red block (Radar)</div>
+            <div class="hg-desc"><strong>Bear lean detected.</strong> Evidence of downward pressure: funding favours shorts, longs are crowded, price pressing the bottom of the range, lower highs forming, candles closing bearish. <strong>This coin may dump — but verify first.</strong> Click it → run Analysis → confirm before acting.</div>
+          </div>
+        </div>
+
+        <div class="hg-item">
+          <div class="hg-swatch" style="background:rgba(255,213,79,0.25);border:1px solid rgba(255,213,79,0.5)"></div>
+          <div class="hg-text">
+            <div class="hg-label" style="color:var(--gold)">Gold block (Radar)</div>
+            <div class="hg-desc"><strong>No clear lean.</strong> Evidence is mixed — both bull and bear signals present. The coin is coiling and about to move, but direction is genuinely unclear. Wait for a clear breakout or use the Analysis page to dig deeper.</div>
+          </div>
+        </div>
+
+        <div class="hg-item">
+          <div class="hg-swatch" style="background:var(--bg4);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:8px;color:var(--sub)">①②</div>
+          <div class="hg-text">
+            <div class="hg-label">The right workflow</div>
+            <div class="hg-desc"><strong>Step 1:</strong> Use Radar to find coins with high Burst scores and a directional lean. <strong>Step 2:</strong> Click the coin → switch to Analysis. <strong>Step 3:</strong> Run the Setups scanner or full analysis to confirm structure, entry quality, and direction. <strong>Only act after Step 3.</strong> Radar is a watchlist builder, not a trade trigger.</div>
           </div>
         </div>
 
@@ -5481,6 +5529,9 @@ function renderHeatmap(results) {
             rcEl.textContent = (coin.setupType ? coin.setupType.toUpperCase()+' · ' : '') + (coin.entryQuality||'');
           }
         }
+        // Show radar disclaimer only in radar mode
+        const disclaimer = document.getElementById('ht-radar-disclaimer');
+        if (disclaimer) disclaimer.style.display = _scanMode === 'radar' ? 'block' : 'none';
       });
       block.addEventListener('mouseleave', () => {
         document.getElementById('heatmap-tooltip').classList.remove('show');
@@ -5537,6 +5588,9 @@ function renderRankedList(results) {
         : coin.signal==='SQUEEZE BUILD' ? 'var(--red)'
         : coin.signal==='LIQ MAGNET'    ? 'var(--blue)'
         : 'var(--gold)';
+      const leanColor = coin.lean === 'BULL' ? 'var(--green)' : coin.lean === 'BEAR' ? 'var(--red)' : 'var(--gold)';
+      const leanIcon  = coin.lean === 'BULL' ? '▲' : coin.lean === 'BEAR' ? '▼' : '◆';
+      const leanLabel = coin.lean === 'BULL' ? 'BULL LEAN' : coin.lean === 'BEAR' ? 'BEAR LEAN' : 'NEUTRAL';
       card.innerHTML = `
         <div class="coin-score-bar"><div class="coin-score-fill" style="width:${coin.score}%;background:${barColor}"></div></div>
         <div class="coin-card-top">
@@ -5544,6 +5598,7 @@ function renderRankedList(results) {
             <div class="rank-badge ${idx<3?'top3':''}">${idx+1}</div>
             <div class="coin-sym">${coin.symbol}</div>
             <span class="coin-class-badge" style="background:rgba(255,213,79,0.1);color:${signalColor};border-color:${signalColor}33">⚡ ${coin.signal||'WATCH'}</span>
+            <span class="coin-class-badge" style="background:rgba(0,0,0,0.2);color:${leanColor};border-color:${leanColor}44">${leanIcon} ${leanLabel}</span>
           </div>
           <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
             <div class="coin-score-block">
@@ -5555,6 +5610,13 @@ function renderRankedList(results) {
         </div>
         <div class="coin-tags">${(coin.tags||[]).map(t=>`<span class="scan-tag ${t.type||'neutral'}">${t.label}</span>`).join('')}</div>
         <div class="coin-explanation">${coin.explanation||'—'}</div>
+        <div style="margin:5px 10px 4px;padding:5px 8px;background:rgba(255,213,79,0.05);border:1px solid rgba(255,213,79,0.15);border-left:2px solid rgba(255,213,79,0.5);font-size:8px;line-height:1.55;color:var(--muted)">
+          <span style="color:var(--gold);font-weight:600">⚠ RADAR — Pre-burst detection only.</span>
+          <span style="color:${leanColor}"> ${leanIcon} ${leanLabel}</span> is based on positioning pressure &amp; candle bias —
+          <strong style="color:var(--sub)">not a confirmed trade signal.</strong>
+          Green = bull pressure detected. Red = bear pressure. Direction is unconfirmed until price breaks structure.
+          <span style="color:var(--sub)">Click to open Analysis and verify before acting.</span>
+        </div>
         <div class="coin-meta">
           <div class="coin-meta-item">COIL:<span class="coin-meta-val" style="color:var(--green)">${coin.comprScore||0}</span></div>
           <div class="coin-meta-item">PROX:<span class="coin-meta-val" style="color:var(--blue)">${coin.liqScore||0}</span></div>
