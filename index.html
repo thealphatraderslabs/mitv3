@@ -242,6 +242,23 @@ body{
   line-height:1.6;text-align:center;
   letter-spacing:0.05em;
 }
+.drawer-mode-btn{
+  background:var(--bg3);
+  border:1px solid var(--border2);
+  color:var(--sub);
+  font-family:var(--font-mono);
+  padding:8px 6px;cursor:pointer;
+  text-align:center;
+  transition:all 0.15s;
+  line-height:1;
+}
+.drawer-mode-btn:hover{border-color:var(--green);color:var(--text);}
+.drawer-mode-btn.active{
+  background:var(--green-dim);
+  border-color:rgba(0,230,118,0.4);
+  color:var(--green);
+}
+.drawer-mode-btn.active span:last-child{color:rgba(0,230,118,0.7)!important;}
 
 /* ════════════════════════════════════
    STAGE WRAPPER
@@ -1370,6 +1387,19 @@ body{
   </div>
   <div class="drawer-body">
     <div class="drawer-field">
+      <div class="drawer-label">Scan Mode</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+        <button id="modeSetups" class="drawer-mode-btn active" onclick="setScanMode('setups')">
+          <span style="font-size:9px;letter-spacing:0.1em">◈ SETUPS</span>
+          <span style="font-size:7px;color:var(--muted);display:block;margin-top:2px">Structure + Entry</span>
+        </button>
+        <button id="modeRadar" class="drawer-mode-btn" onclick="setScanMode('radar')">
+          <span style="font-size:9px;letter-spacing:0.1em">⚡ RADAR</span>
+          <span style="font-size:7px;color:var(--muted);display:block;margin-top:2px">Pre-Move Energy</span>
+        </button>
+      </div>
+    </div>
+    <div class="drawer-field">
       <div class="drawer-label">Timeframe</div>
       <select class="drawer-select" id="scanTfSelect">
         <option value="5m">5m</option>
@@ -1388,7 +1418,7 @@ body{
         <option value="exclude20">Exclude Top 20</option>
       </select>
     </div>
-    <div class="drawer-info">
+    <div class="drawer-info" id="drawer-mode-info">
       Scans full Binance futures universe. Filters by $1M+ 24h volume. Context-aware scoring engine prioritises structure over compression.
     </div>
   </div>
@@ -1882,6 +1912,7 @@ let _autoTimer      = null;
 let _pipeCollapsed  = false;
 let _currentView    = 'heatmap'; // 'heatmap' | 'ranked'
 let _currentFilter  = 'all';
+let _scanMode       = 'setups'; // 'setups' | 'radar'
 
 // ── DATA CACHE (TTL: 45s per symbol) ──────────────────────────
 const _cache = {};
@@ -2655,17 +2686,6 @@ function validateSetup(ctx, structureType, setup) {
     return { valid: false, reason: 'BEAR_BIAS_BULL_BOS' };
   if (isBear && stTrend === 1 && trendingUp)
     return { valid: false, reason: 'BEAR_BIAS_BULL_TREND' };
-
-  // Rule 2c: BIAS vs STRUCTURE contradiction — the bounce-in-downtrend false positive.
-  // Root cause: a small bounce fires recentCHOCH_up → bias = 'bullish_transition' → isBull = true,
-  // while detectStructureType correctly reads the broader LL/LH sequence as 'trend_down'.
-  // These two directly contradict. The swing-sequence classification (structureType) covers more
-  // history than the 20-bar CHoCH recency window — it wins. Reject the setup.
-  // Mirror: a small dip in an uptrend fires isBear but structureType = 'trend_up' → reject.
-  if (structureType.type === 'trend_down' && isBull)
-    return { valid: false, reason: 'BULL_BIAS_IN_TREND_DOWN' };
-  if (structureType.type === 'trend_up' && isBear)
-    return { valid: false, reason: 'BEAR_BIAS_IN_TREND_UP' };
 
   // Rule 4: Weak trend — no directional conviction → reject continuation setups
   // tqi < 0.30 = very weak momentum, trendStrength = 'weak'
@@ -4550,6 +4570,208 @@ async function processWithConcurrency(items, fn, concurrency=6, onProgress) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// SCAN MODE TOGGLE
+// ═══════════════════════════════════════════════════════════════
+function setScanMode(mode) {
+  _scanMode = mode;
+  document.getElementById('modeSetups').classList.toggle('active', mode === 'setups');
+  document.getElementById('modeRadar').classList.toggle('active', mode === 'radar');
+  const info = document.getElementById('drawer-mode-info');
+  if (mode === 'radar') {
+    info.innerHTML = '<span style="color:var(--gold)">⚡ RADAR MODE</span> — Finds coins with energy building: compression, liquidity pools, extreme derivatives, volume drying up. Direction-agnostic. No structure required.';
+  } else {
+    info.textContent = 'Scans full Binance futures universe. Filters by $1M+ 24h volume. Context-aware scoring engine prioritises structure over compression.';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RADAR SCORING ENGINE
+// Scores coins 0–100 on pre-move energy only.
+// No direction. No structure gates. No BOS/CHoCH required.
+//
+// Pillars:
+//   Compression    40% — ATR contracting, range shrinking → coiling
+//   Liquidity      25% — Equal highs/lows stacked → fuel pools sitting
+//   Derivatives    20% — Funding/L/S extreme (either side) → squeeze fuel
+//   Volume dry-up  15% — Volume below 20-bar avg → quiet before storm
+// ═══════════════════════════════════════════════════════════════
+function radarScore(candles, derivs, quoteVol) {
+  if (!candles || candles.length < 60) return null;
+  const n = candles.length;
+  const price = candles[n-1].close;
+
+  // ── 1. COMPRESSION PILLAR (40%) ──────────────────────────────
+  // Three compression signals, combined:
+  //   A. ATR contraction: recent 10-bar ATR vs prior 30-bar ATR
+  //   B. Price range: recent 10-bar high-low vs prior 20-bar high-low
+  //   C. Efficiency Ratio: low ER = no direction = coiling
+  const atrArr = calcATR(candles, 14);
+  const atrR10 = atrArr.slice(-10).filter(Boolean);
+  const atrO30 = atrArr.slice(-40, -10).filter(Boolean);
+  const avgR10 = atrR10.reduce((a,b)=>a+b,0) / Math.max(atrR10.length,1);
+  const avgO30 = atrO30.reduce((a,b)=>a+b,0) / Math.max(atrO30.length,1);
+  const atrRatio = avgO30 > 0 ? avgR10 / avgO30 : 1; // < 1 = contracting
+
+  const rec10H = Math.max(...candles.slice(-10).map(c=>c.high));
+  const rec10L = Math.min(...candles.slice(-10).map(c=>c.low));
+  const pri20H = Math.max(...candles.slice(-30,-10).map(c=>c.high));
+  const pri20L = Math.min(...candles.slice(-30,-10).map(c=>c.low));
+  const rangeRatio = (pri20H - pri20L) > 0 ? (rec10H - rec10L) / (pri20H - pri20L) : 1; // < 1 = range contracting
+
+  const closes = candles.map(c=>c.close);
+  const er = calcER(closes, 20); // 0 = pure chop/coil, 1 = pure trend
+
+  // Score: reward contraction (low ratios) and low ER
+  let comprScore = 0;
+  // ATR contraction (0-40pts)
+  if (atrRatio < 0.50)      comprScore += 40;
+  else if (atrRatio < 0.65) comprScore += 30;
+  else if (atrRatio < 0.75) comprScore += 22;
+  else if (atrRatio < 0.85) comprScore += 14;
+  else if (atrRatio < 0.95) comprScore += 6;
+  // Range contraction (0-35pts)
+  if (rangeRatio < 0.35)      comprScore += 35;
+  else if (rangeRatio < 0.50) comprScore += 25;
+  else if (rangeRatio < 0.65) comprScore += 16;
+  else if (rangeRatio < 0.80) comprScore += 8;
+  // Low ER = no clear direction = coiling (0-25pts)
+  if (er < 0.15)      comprScore += 25;
+  else if (er < 0.25) comprScore += 18;
+  else if (er < 0.35) comprScore += 10;
+  else if (er < 0.45) comprScore += 4;
+  comprScore = Math.min(100, comprScore);
+
+  // ── 2. LIQUIDITY POOLS PILLAR (25%) ──────────────────────────
+  // Equal highs/lows within 0.5% tolerance = untouched liquidity pools
+  // More pools = more fuel for a big move when price sweeps them
+  const swings = findSwings(candles, 5);
+  const { highs, lows } = swings;
+  const tolerance = price * 0.005;
+  let eqHighCount = 0, eqLowCount = 0;
+  for (let i = 0; i < highs.length-1; i++)
+    for (let j = i+1; j < highs.length; j++)
+      if (Math.abs(highs[i].price - highs[j].price) < tolerance) eqHighCount++;
+  for (let i = 0; i < lows.length-1; i++)
+    for (let j = i+1; j < lows.length; j++)
+      if (Math.abs(lows[i].price - lows[j].price) < tolerance) eqLowCount++;
+  const totalPools = eqHighCount + eqLowCount;
+  // Proximity bonus: pool within 3% of current price = more immediately actionable
+  const nearHighPool = highs.some(h => Math.abs(h.price - price) / price < 0.03 &&
+    highs.filter(h2 => Math.abs(h2.price - h.price) < tolerance).length > 1);
+  const nearLowPool  = lows.some(l  => Math.abs(l.price - price) / price < 0.03 &&
+    lows.filter(l2  => Math.abs(l2.price - l.price)  < tolerance).length > 1);
+  // Unfilled FVGs = additional magnet zones
+  const fvgs = findFVGs(candles);
+  const openFVGs = fvgs.filter(g => !g.filled).length;
+
+  let liqScore = 0;
+  liqScore += Math.min(totalPools * 14, 56); // pools: up to 56pts
+  if (nearHighPool || nearLowPool) liqScore += 22; // near pool: +22
+  liqScore += Math.min(openFVGs * 8, 22);    // open FVGs: up to 22pts
+  liqScore = Math.min(100, liqScore);
+
+  // ── 3. DERIVATIVES PILLAR (20%) ──────────────────────────────
+  // Extreme funding (either sign) or crowded L/S = squeeze fuel
+  // We don't care which direction — extremes in either direction = energy
+  const funding = derivs ? (derivs.funding || 0) : 0;
+  const lsRatio = derivs ? (derivs.lsRatio || 1) : 1;
+  const absFunding = Math.abs(funding);
+  const lsExtreme  = Math.max(lsRatio, 1/Math.max(lsRatio, 0.01)); // how far from 1.0
+
+  let derivScore = 0;
+  // Funding extremity (0-55pts)
+  if (absFunding > 0.10)      derivScore += 55;
+  else if (absFunding > 0.06) derivScore += 40;
+  else if (absFunding > 0.03) derivScore += 25;
+  else if (absFunding > 0.01) derivScore += 12;
+  // L/S ratio extremity (0-45pts)
+  if (lsExtreme > 2.0)      derivScore += 45;
+  else if (lsExtreme > 1.6) derivScore += 32;
+  else if (lsExtreme > 1.3) derivScore += 18;
+  else if (lsExtreme > 1.1) derivScore += 8;
+  derivScore = Math.min(100, derivScore);
+
+  // ── 4. VOLUME DRY-UP PILLAR (15%) ────────────────────────────
+  // Recent volume declining vs 20-bar baseline = institutional accumulation / markup incoming
+  // Use candle volume (base units). quoteVol is a point-in-time snapshot from tickers.
+  const vols    = candles.map(c => c.vol).filter(v => v > 0);
+  const volR5   = vols.slice(-5).reduce((a,b)=>a+b,0)  / 5;
+  const volO20  = vols.slice(-25,-5).reduce((a,b)=>a+b,0) / 20;
+  const volRatio = volO20 > 0 ? volR5 / volO20 : 1; // < 1 = volume drying up
+
+  let volScore = 0;
+  if (volRatio < 0.35)      volScore = 100;
+  else if (volRatio < 0.50) volScore = 80;
+  else if (volRatio < 0.65) volScore = 60;
+  else if (volRatio < 0.80) volScore = 38;
+  else if (volRatio < 0.92) volScore = 18;
+
+  // ── COMPOSITE ────────────────────────────────────────────────
+  const composite = Math.round(
+    0.40 * comprScore +
+    0.25 * liqScore   +
+    0.20 * derivScore +
+    0.15 * volScore
+  );
+
+  // ── TAGS ─────────────────────────────────────────────────────
+  const tags = [];
+  if (atrRatio < 0.75 || rangeRatio < 0.65) tags.push({ label: 'COILING', type: 'compression' });
+  if (totalPools >= 2 || nearHighPool || nearLowPool) tags.push({ label: 'LIQ POOL', type: 'liquidity' });
+  if (openFVGs >= 2) tags.push({ label: 'OPEN FVG ×'+openFVGs, type: 'liquidity' });
+  if (absFunding > 0.03) tags.push({ label: funding > 0 ? 'FUND+'+funding.toFixed(3)+'%' : 'FUND'+funding.toFixed(3)+'%', type: 'squeeze' });
+  if (lsExtreme > 1.3) tags.push({ label: lsRatio > 1 ? 'LONGS CROWDED' : 'SHORTS CROWDED', type: 'squeeze' });
+  if (volRatio < 0.65) tags.push({ label: 'VOL DRY', type: 'neutral' });
+  if (er < 0.25) tags.push({ label: 'NO DIRECTION', type: 'neutral' });
+
+  // ── SIGNAL LABEL ─────────────────────────────────────────────
+  // Characterise what kind of pre-move energy this is
+  let signal = 'WATCH';
+  if (comprScore >= 60 && liqScore >= 40)          signal = 'COIL + LIQ';
+  else if (derivScore >= 60 && comprScore >= 40)   signal = 'SQUEEZE BUILD';
+  else if (comprScore >= 70)                       signal = 'TIGHT COIL';
+  else if (liqScore >= 60)                         signal = 'LIQ MAGNET';
+  else if (volScore >= 60 && comprScore >= 40)     signal = 'VOL DRY + COIL';
+
+  // Narrative
+  const narrative = [
+    atrRatio < 0.75 ? `ATR contracted to ${(atrRatio*100).toFixed(0)}% of baseline.` : '',
+    rangeRatio < 0.65 ? `Price range at ${(rangeRatio*100).toFixed(0)}% of prior range.` : '',
+    totalPools > 0 ? `${totalPools} liquidity pool${totalPools>1?'s':''} detected (${eqHighCount} above, ${eqLowCount} below).` : '',
+    openFVGs > 0 ? `${openFVGs} open FVG${openFVGs>1?'s':''} acting as magnet zones.` : '',
+    absFunding > 0.01 ? `Funding ${funding > 0 ? '+' : ''}${funding.toFixed(4)}% — ${funding > 0 ? 'longs overextended' : 'shorts overextended'}.` : '',
+    lsExtreme > 1.3 ? `L/S ratio ${lsRatio.toFixed(2)} — ${lsRatio > 1 ? 'crowded long' : 'crowded short'}, squeeze risk.` : '',
+    volRatio < 0.80 ? `Volume at ${(volRatio*100).toFixed(0)}% of 20-bar avg — drying up.` : '',
+  ].filter(Boolean).join(' ');
+
+  return {
+    score: composite,
+    signal,
+    tags: tags.slice(0, 6),
+    explanation: narrative || 'Moderate pre-move energy detected.',
+    // Score breakdown for tooltip
+    comprScore: Math.round(comprScore),
+    liqScore:   Math.round(liqScore),
+    derivScore: Math.round(derivScore),
+    volScore:   Math.round(volScore),
+    // Raw values for display
+    atrRatio, rangeRatio, er, totalPools, openFVGs,
+    funding, lsRatio, volRatio,
+    // Required by shared render path
+    bias: 'neutral',
+    classification: signal,
+    classType: 'radar',
+    marketState: 'RADAR',
+    structureType: 'radar',
+    setupType: 'radar',
+    entryQuality: '—',
+    reasonCode: 'RADAR_SCORE',
+    sweepDetected: false,
+    validSetup: false,
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
 // MAIN SCAN RUNNER
 // ═══════════════════════════════════════════════════════════════
 async function runMarketScan() {
@@ -4737,7 +4959,7 @@ async function runMarketScan() {
        <div style="margin-top:4px;font-size:8px;color:var(--muted);letter-spacing:0.06em">
          REJECTION BREAKDOWN ·
          <span style="color:var(--red)">${(rejectTally['INVALID_STRUCTURE']||0)+(rejectTally['NO_CLEAN_SETUP']||0)} NO STRUCT/SETUP</span> ·
-         <span style="color:var(--orange)">${(rejectTally['CONTRA_TREND_LONG_IN_DOWNTREND']||0)+(rejectTally['CONTRA_TREND_SHORT_IN_UPTREND']||0)+(rejectTally['BULL_BIAS_BEAR_BOS']||0)+(rejectTally['BEAR_BIAS_BULL_BOS']||0)+(rejectTally['BULL_BIAS_BEAR_TREND']||0)+(rejectTally['BEAR_BIAS_BULL_TREND']||0)+(rejectTally['BULL_BIAS_IN_TREND_DOWN']||0)+(rejectTally['BEAR_BIAS_IN_TREND_UP']||0)} CONTRA-TREND</span> ·
+         <span style="color:var(--orange)">${(rejectTally['CONTRA_TREND_LONG_IN_DOWNTREND']||0)+(rejectTally['CONTRA_TREND_SHORT_IN_UPTREND']||0)+(rejectTally['BULL_BIAS_BEAR_BOS']||0)+(rejectTally['BEAR_BIAS_BULL_BOS']||0)+(rejectTally['BULL_BIAS_BEAR_TREND']||0)+(rejectTally['BEAR_BIAS_BULL_TREND']||0)} CONTRA-TREND</span> ·
          <span style="color:var(--gold)">${rejectTally['LATE_ENTRY_REJECTED']||0} LATE ENTRY</span> ·
          <span style="color:var(--muted)">${(rejectTally['NO_VOLATILITY']||0)+(rejectTally['DEAD_MARKET']||0)} LOW VOL</span> ·
          <span style="color:var(--muted)">${(rejectTally['BULL_IN_PREMIUM_NO_PULLBACK']||0)+(rejectTally['BEAR_IN_DISCOUNT_NO_PULLBACK']||0)} PREMIUM/DISCOUNT</span> ·
