@@ -242,23 +242,6 @@ body{
   line-height:1.6;text-align:center;
   letter-spacing:0.05em;
 }
-.drawer-mode-btn{
-  background:var(--bg3);
-  border:1px solid var(--border2);
-  color:var(--sub);
-  font-family:var(--font-mono);
-  padding:8px 6px;cursor:pointer;
-  text-align:center;
-  transition:all 0.15s;
-  line-height:1;
-}
-.drawer-mode-btn:hover{border-color:var(--green);color:var(--text);}
-.drawer-mode-btn.active{
-  background:var(--green-dim);
-  border-color:rgba(0,230,118,0.4);
-  color:var(--green);
-}
-.drawer-mode-btn.active span:last-child{color:rgba(0,230,118,0.7)!important;}
 
 /* ════════════════════════════════════
    STAGE WRAPPER
@@ -1387,19 +1370,6 @@ body{
   </div>
   <div class="drawer-body">
     <div class="drawer-field">
-      <div class="drawer-label">Scan Mode</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
-        <button id="modeSetups" class="drawer-mode-btn active" onclick="setScanMode('setups')">
-          <span style="font-size:9px;letter-spacing:0.1em">◈ SETUPS</span>
-          <span style="font-size:7px;color:var(--muted);display:block;margin-top:2px">Structure + Entry</span>
-        </button>
-        <button id="modeRadar" class="drawer-mode-btn" onclick="setScanMode('radar')">
-          <span style="font-size:9px;letter-spacing:0.1em">⚡ RADAR</span>
-          <span style="font-size:7px;color:var(--muted);display:block;margin-top:2px">Pre-Move Energy</span>
-        </button>
-      </div>
-    </div>
-    <div class="drawer-field">
       <div class="drawer-label">Timeframe</div>
       <select class="drawer-select" id="scanTfSelect">
         <option value="5m">5m</option>
@@ -1418,7 +1388,7 @@ body{
         <option value="exclude20">Exclude Top 20</option>
       </select>
     </div>
-    <div class="drawer-info" id="drawer-mode-info">
+    <div class="drawer-info">
       Scans full Binance futures universe. Filters by $1M+ 24h volume. Context-aware scoring engine prioritises structure over compression.
     </div>
   </div>
@@ -1675,16 +1645,16 @@ body{
         <button class="view-btn" id="btn-ranked">≡ RANKED</button>
       </div>
       <div class="filter-pills">
-        <button class="filter-pill active" data-filter="all" id="pill-all">ALL</button>
-        <button class="filter-pill" data-filter="high_priority" id="pill-high">⬆ HIGH PRIORITY</button>
-        <button class="filter-pill" data-filter="breakout" id="pill-breakout">BREAKOUT</button>
-        <button class="filter-pill" data-filter="squeeze" id="pill-squeeze">SQUEEZE</button>
-        <button class="filter-pill" data-filter="trend" id="pill-trend">TREND</button>
+        <button class="filter-pill active" data-filter="all">ALL</button>
+        <button class="filter-pill" data-filter="high_priority">⬆ HIGH PRIORITY</button>
+        <button class="filter-pill" data-filter="breakout">BREAKOUT</button>
+        <button class="filter-pill" data-filter="squeeze">SQUEEZE</button>
+        <button class="filter-pill" data-filter="trend">TREND</button>
       </div>
       <div class="scanner-stats" id="scanner-stats" style="display:none">
         <span>SCANNED <span class="scan-stat-val" id="stat-scanned">—</span></span>
         <span>VALID <span class="scan-stat-val" id="stat-valid">—</span></span>
-        <span id="stat-high-label">HIGH PRIORITY <span class="scan-stat-val" id="stat-high">—</span></span>
+        <span>HIGH PRIORITY <span class="scan-stat-val" id="stat-high">—</span></span>
         <span>TF <span class="scan-stat-val" id="stat-tf">—</span></span>
         <span id="stat-time" style="color:var(--muted)">—</span>
       </div>
@@ -1844,11 +1814,11 @@ body{
       <!-- Heatmap -->
       <div id="heatmap-view">
         <div id="heatmap-canvas-wrap" style="min-height:400px;position:relative;">
-          <div class="heatmap-legend" id="heatmap-legend">
-            <span id="legend-left" style="color:var(--red)">◀ BEARISH</span>
-            <div class="heatmap-legend-bar" id="legend-bar" style="background:linear-gradient(90deg,rgba(255,40,40,0.8),rgba(200,160,50,0.7),rgba(0,230,118,0.85))"></div>
-            <span id="legend-right" style="color:var(--green)">BULLISH ▶</span>
-            <span id="legend-sub" style="margin-left:12px;color:var(--muted)">SIZE = 24H VOLUME · COLOR = BIAS + SCORE</span>
+          <div class="heatmap-legend">
+            <span style="color:var(--red)">◀ BEARISH</span>
+            <div class="heatmap-legend-bar" style="background:linear-gradient(90deg,rgba(255,40,40,0.8),rgba(200,160,50,0.7),rgba(0,230,118,0.85))"></div>
+            <span style="color:var(--green)">BULLISH ▶</span>
+            <span style="margin-left:12px;color:var(--muted)">SIZE = 24H VOLUME · COLOR = BIAS + SCORE</span>
           </div>
         </div>
       </div>
@@ -1912,7 +1882,6 @@ let _autoTimer      = null;
 let _pipeCollapsed  = false;
 let _currentView    = 'heatmap'; // 'heatmap' | 'ranked'
 let _currentFilter  = 'all';
-let _scanMode       = 'setups'; // 'setups' | 'radar'
 
 // ── DATA CACHE (TTL: 45s per symbol) ──────────────────────────
 const _cache = {};
@@ -4570,372 +4539,6 @@ async function processWithConcurrency(items, fn, concurrency=6, onProgress) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// SCAN MODE TOGGLE
-// ═══════════════════════════════════════════════════════════════
-function setScanMode(mode) {
-  _scanMode = mode;
-  document.getElementById('modeSetups').classList.toggle('active', mode === 'setups');
-  document.getElementById('modeRadar').classList.toggle('active', mode === 'radar');
-  const info = document.getElementById('drawer-mode-info');
-  if (mode === 'radar') {
-    info.innerHTML = '<span style="color:var(--gold)">⚡ RADAR MODE</span> — Finds coins with energy building: compression, liquidity pools, extreme derivatives, volume drying up. Direction-agnostic. No structure required.';
-  } else {
-    info.textContent = 'Scans full Binance futures universe. Filters by $1M+ 24h volume. Context-aware scoring engine prioritises structure over compression.';
-  }
-  _updatePillLabels();
-}
-
-// ═══════════════════════════════════════════════════════════════
-// PRE-BURST SCORING ENGINE  (replaces old "Radar")
-//
-// Goal: find coins that are ABOUT TO move — not just consolidating.
-// The old radar scored coiling (static state). This scores the
-// transition from coil to burst by detecting 3 stages:
-//
-//   Stage 1 — Coil Quality      (25%) — Is the spring compressed?
-//   Stage 2 — Trigger Proximity (30%) — Is price pressing the wire?
-//   Stage 3 — Momentum Shift    (25%) — Are buyers/sellers loading?
-//   Stage 4 — Deriv Positioning (20%) — Is smart money positioned?
-//
-// Outputs a directional lean (bull/bear/neutral) so the heatmap
-// can colour by direction like the Setups scanner.
-// ═══════════════════════════════════════════════════════════════
-function radarScore(candles, derivs, quoteVol) {
-  if (!candles || candles.length < 60) return null;
-  const n = candles.length;
-  const price  = candles[n-1].close;
-  const closes = candles.map(c => c.close);
-  const highs_c= candles.map(c => c.high);
-  const lows_c = candles.map(c => c.low);
-  const vols_c = candles.map(c => c.vol);
-
-  // ── SHARED CALCS ─────────────────────────────────────────────
-  const atrArr  = calcATR(candles, 14);
-  const atr     = atrArr[n-1] || price * 0.015;
-  const er20    = calcER(closes, 20);
-  const swings  = findSwings(candles, 5);
-  const { highs: swingH, lows: swingL } = swings;
-  const fvgs    = findFVGs(candles);
-  const funding = derivs ? (derivs.funding || 0) : 0;
-  const lsRatio = derivs ? (derivs.lsRatio || 1) : 1;
-
-  // ════════════════════════════════════════════════════════════
-  // STAGE 1 — COIL QUALITY (25%)
-  // Is the market compressed enough that a move is loading?
-  // ════════════════════════════════════════════════════════════
-  const atrR8  = atrArr.slice(-8).filter(Boolean);
-  const atrO30 = atrArr.slice(-38, -8).filter(Boolean);
-  const avgR8  = atrR8.reduce((a,b)=>a+b,0) / Math.max(atrR8.length,1);
-  const avgO30 = atrO30.reduce((a,b)=>a+b,0) / Math.max(atrO30.length,1);
-  const atrRatio   = avgO30 > 0 ? avgR8 / avgO30 : 1;  // <1 = contracting
-
-  const rec8H  = Math.max(...highs_c.slice(-8));
-  const rec8L  = Math.min(...lows_c.slice(-8));
-  const pri20H = Math.max(...highs_c.slice(-28,-8));
-  const pri20L = Math.min(...lows_c.slice(-28,-8));
-  const rangeRatio = (pri20H - pri20L) > 0 ? (rec8H - rec8L) / (pri20H - pri20L) : 1;
-
-  let coilScore = 0;
-  // ATR contraction
-  if      (atrRatio < 0.45) coilScore += 42;
-  else if (atrRatio < 0.60) coilScore += 32;
-  else if (atrRatio < 0.72) coilScore += 22;
-  else if (atrRatio < 0.84) coilScore += 12;
-  else if (atrRatio < 0.93) coilScore += 5;
-  // Range compression
-  if      (rangeRatio < 0.30) coilScore += 38;
-  else if (rangeRatio < 0.45) coilScore += 28;
-  else if (rangeRatio < 0.60) coilScore += 18;
-  else if (rangeRatio < 0.75) coilScore += 8;
-  // Low ER = no trend = coiling laterally
-  if      (er20 < 0.15) coilScore += 20;
-  else if (er20 < 0.28) coilScore += 12;
-  else if (er20 < 0.40) coilScore += 5;
-  coilScore = Math.min(100, coilScore);
-
-  // ════════════════════════════════════════════════════════════
-  // STAGE 2 — TRIGGER PROXIMITY (30%)
-  // How close is price to a loaded liquidity pool?
-  // The closer, the higher the probability of a sweep → reversal.
-  // Liquidity = equal highs/lows within 0.5% tolerance.
-  // ════════════════════════════════════════════════════════════
-  const liqTol = price * 0.005;
-  let eqHighCount = 0, eqLowCount = 0;
-  const eqHighLevels = [], eqLowLevels = [];
-  for (let i = 0; i < swingH.length-1; i++)
-    for (let j = i+1; j < swingH.length; j++)
-      if (Math.abs(swingH[i].price - swingH[j].price) < liqTol) {
-        eqHighCount++;
-        eqHighLevels.push((swingH[i].price + swingH[j].price) / 2);
-      }
-  for (let i = 0; i < swingL.length-1; i++)
-    for (let j = i+1; j < swingL.length; j++)
-      if (Math.abs(swingL[i].price - swingL[j].price) < liqTol) {
-        eqLowCount++;
-        eqLowLevels.push((swingL[i].price + swingL[j].price) / 2);
-      }
-
-  // Distance from price to nearest pool as % of ATR
-  const nearestHighDist = eqHighLevels.length > 0
-    ? Math.min(...eqHighLevels.map(l => Math.abs(l - price)))
-    : Infinity;
-  const nearestLowDist  = eqLowLevels.length > 0
-    ? Math.min(...eqLowLevels.map(l => Math.abs(l - price)))
-    : Infinity;
-  const nearestPoolDist = Math.min(nearestHighDist, nearestLowDist);
-  const distInATRs      = atr > 0 ? nearestPoolDist / atr : 999;
-
-  // Open FVGs: price within 2 ATR of one = magnet pull
-  const openFVGs    = fvgs.filter(g => !g.filled);
-  const fvgDistMin  = openFVGs.length > 0
-    ? Math.min(...openFVGs.map(g => Math.abs(((g.top+g.bottom)/2) - price)))
-    : Infinity;
-  const fvgInATRs   = atr > 0 ? fvgDistMin / atr : 999;
-
-  // Which side is price pressing? (repeated tests of same side = pressure)
-  const last5H    = Math.max(...highs_c.slice(-5));
-  const last5L    = Math.min(...lows_c.slice(-5));
-  const pressHigh = (rec8H - last5L) > 0
-    ? (last5H - rec8L) / (rec8H - rec8L) : 0.5;  // 1 = price at top of coil
-  const pressLow  = 1 - pressHigh;
-
-  let proxScore = 0;
-  // Pool proximity (0-50 pts) — closer = higher
-  if      (distInATRs < 0.5)  proxScore += 50;
-  else if (distInATRs < 1.0)  proxScore += 38;
-  else if (distInATRs < 1.8)  proxScore += 25;
-  else if (distInATRs < 3.0)  proxScore += 12;
-  else if (distInATRs < 5.0)  proxScore += 5;
-  // Open FVG pull (0-28 pts)
-  if      (fvgInATRs < 1.0)   proxScore += 28;
-  else if (fvgInATRs < 2.0)   proxScore += 18;
-  else if (fvgInATRs < 3.5)   proxScore += 8;
-  // Directional pressure within coil (0-22 pts)
-  const maxPress = Math.max(pressHigh, pressLow);
-  if      (maxPress > 0.82) proxScore += 22;
-  else if (maxPress > 0.68) proxScore += 14;
-  else if (maxPress > 0.55) proxScore += 6;
-  proxScore = Math.min(100, proxScore);
-
-  // ════════════════════════════════════════════════════════════
-  // STAGE 3 — MOMENTUM SHIFT (25%)
-  // Are candle bodies expanding? Is volume ticking up on one side?
-  // This is the key missing piece from the old radar — it detects
-  // the transition from stillness to motion, with direction.
-  // ════════════════════════════════════════════════════════════
-
-  // A. Candle body expansion: last 3 bars vs prior 10 bar average
-  const bodyOf = c => Math.abs(c.close - c.open);
-  const body3   = candles.slice(-3).map(bodyOf);
-  const body10  = candles.slice(-13, -3).map(bodyOf);
-  const avgBody3  = body3.reduce((a,b)=>a+b,0) / 3;
-  const avgBody10 = body10.reduce((a,b)=>a+b,0) / Math.max(body10.length,1);
-  const bodyExpansion = avgBody10 > 0 ? avgBody3 / avgBody10 : 1;
-
-  // B. Relative volume on last 3 bars vs 20-bar avg (volume spike = participation)
-  const vols3   = vols_c.slice(-3).filter(v=>v>0);
-  const vols20  = vols_c.slice(-23,-3).filter(v=>v>0);
-  const avgVol3 = vols3.reduce((a,b)=>a+b,0) / Math.max(vols3.length,1);
-  const avgVol20= vols20.reduce((a,b)=>a+b,0) / Math.max(vols20.length,1);
-  const relVol  = avgVol20 > 0 ? avgVol3 / avgVol20 : 1; // >1 = rising participation
-
-  // C. Higher lows (bull pressure) or lower highs (bear pressure) inside the coil
-  //    Use last 6 swing lows/highs to detect sequential structure
-  const lastLows  = swingL.slice(-5).map(l => l.price);
-  const lastHighs = swingH.slice(-5).map(h => h.price);
-  let higherLows  = 0, lowerHighs = 0;
-  for (let i = 1; i < lastLows.length;  i++) if (lastLows[i]  > lastLows[i-1])  higherLows++;
-  for (let i = 1; i < lastHighs.length; i++) if (lastHighs[i] < lastHighs[i-1]) lowerHighs++;
-  const bullPressureSwings = higherLows >= 2;
-  const bearPressureSwings = lowerHighs >= 2;
-
-  // D. Directional candle bias on last 5 bars
-  const last5Closes = closes.slice(-5);
-  const bullCandles = candles.slice(-5).filter(c => c.close > c.open).length;
-  const bearCandles = 5 - bullCandles;
-  const candleBias  = bullCandles >= 4 ? 'bull' : bearCandles >= 4 ? 'bear' : 'neutral';
-
-  let momentumScore = 0;
-  // Body expansion (0-35 pts) — the coil is starting to release
-  if      (bodyExpansion > 2.5) momentumScore += 35;
-  else if (bodyExpansion > 1.8) momentumScore += 26;
-  else if (bodyExpansion > 1.3) momentumScore += 16;
-  else if (bodyExpansion > 1.0) momentumScore += 8;
-  // Relative volume uptick (0-30 pts) — participation returning
-  if      (relVol > 2.0)  momentumScore += 30;
-  else if (relVol > 1.5)  momentumScore += 22;
-  else if (relVol > 1.2)  momentumScore += 14;
-  else if (relVol > 1.0)  momentumScore += 6;
-  // Swing structure building (0-20 pts)
-  if (bullPressureSwings || bearPressureSwings) momentumScore += 20;
-  else if (higherLows >= 1 || lowerHighs >= 1)  momentumScore += 10;
-  // Candle direction bias (0-15 pts)
-  if (candleBias !== 'neutral') momentumScore += 15;
-  momentumScore = Math.min(100, momentumScore);
-
-  // ════════════════════════════════════════════════════════════
-  // STAGE 4 — DERIV POSITIONING (20%)
-  // Funding shift direction + L/S extreme = smart money loading
-  // Key change from old radar: we care about DIRECTION of funding
-  // and whether it's CHANGING (a shift is more powerful than a static extreme)
-  // ════════════════════════════════════════════════════════════
-  const absFunding  = Math.abs(funding);
-  const lsExtreme   = Math.max(lsRatio, 1/Math.max(lsRatio, 0.01));
-
-  let derivScore = 0;
-  // Funding pressure (0-55 pts) — any extreme = trapped side will fuel the move
-  if      (absFunding > 0.10) derivScore += 55;
-  else if (absFunding > 0.06) derivScore += 40;
-  else if (absFunding > 0.03) derivScore += 25;
-  else if (absFunding > 0.01) derivScore += 12;
-  // L/S crowding (0-45 pts) — one side over-positioned = squeeze fuel
-  if      (lsExtreme > 2.2) derivScore += 45;
-  else if (lsExtreme > 1.8) derivScore += 34;
-  else if (lsExtreme > 1.4) derivScore += 20;
-  else if (lsExtreme > 1.15)derivScore += 9;
-  derivScore = Math.min(100, derivScore);
-
-  // ════════════════════════════════════════════════════════════
-  // COMPOSITE SCORE
-  // ════════════════════════════════════════════════════════════
-  const composite = Math.round(
-    0.25 * coilScore     +
-    0.30 * proxScore     +
-    0.25 * momentumScore +
-    0.20 * derivScore
-  );
-
-  // ════════════════════════════════════════════════════════════
-  // DIRECTIONAL LEAN
-  // Unlike old radar (always neutral), we derive a lean so the
-  // heatmap can show green/red directional colour.
-  // Logic:  funding sign + L/S ratio + candle/swing bias + which pool is nearest
-  // ════════════════════════════════════════════════════════════
-  let bullEvidence = 0, bearEvidence = 0;
-
-  // Funding: negative = shorts paying = bullish pressure
-  if (funding < -0.02) bullEvidence += 3;
-  else if (funding < -0.005) bullEvidence += 1;
-  else if (funding > 0.05) bearEvidence += 3;
-  else if (funding > 0.015) bearEvidence += 1;
-
-  // L/S: low ratio = crowded shorts = bullish squeeze setup
-  if (lsRatio < 0.75)      bullEvidence += 3;
-  else if (lsRatio < 0.90) bullEvidence += 1;
-  else if (lsRatio > 1.5)  bearEvidence += 3;
-  else if (lsRatio > 1.2)  bearEvidence += 1;
-
-  // Candle bias
-  if (candleBias === 'bull') bullEvidence += 2;
-  else if (candleBias === 'bear') bearEvidence += 2;
-
-  // Swing structure
-  if (bullPressureSwings) bullEvidence += 2;
-  if (bearPressureSwings) bearEvidence += 2;
-
-  // Price pressing which side of the coil?
-  if (pressHigh > 0.70) bullEvidence += 2;  // pressing top = attempting breakout up
-  if (pressLow  > 0.70) bearEvidence += 2;  // pressing bottom = attempting breakout down
-
-  // Nearest pool side: price closer to high pool = sweep up more likely
-  if (nearestHighDist < nearestLowDist) bullEvidence += 1;
-  else if (nearestLowDist < nearestHighDist) bearEvidence += 1;
-
-  const totalEvid = bullEvidence + bearEvidence || 1;
-  let lean = 'neutral';
-  let leanBias = 'neutral';
-  if (bullEvidence / totalEvid > 0.62) { lean = 'BULL'; leanBias = 'bullish'; }
-  else if (bearEvidence / totalEvid > 0.62) { lean = 'BEAR'; leanBias = 'bearish'; }
-
-  // ════════════════════════════════════════════════════════════
-  // SIGNAL LABEL
-  // ════════════════════════════════════════════════════════════
-  let signal = 'WATCH';
-  if      (proxScore >= 60 && momentumScore >= 40) signal = lean !== 'neutral' ? lean + ' TRIGGER' : 'TRIGGER ZONE';
-  else if (momentumScore >= 60 && coilScore >= 40) signal = 'MOMENTUM SHIFT';
-  else if (coilScore >= 65 && proxScore >= 40)     signal = lean !== 'neutral' ? lean + ' COIL'    : 'TIGHT COIL';
-  else if (derivScore >= 60 && momentumScore >= 30)signal = 'SQUEEZE BUILD';
-  else if (proxScore >= 55)                         signal = 'LIQ MAGNET';
-  else if (coilScore >= 55)                         signal = 'COILING';
-
-  // ════════════════════════════════════════════════════════════
-  // TAGS
-  // ════════════════════════════════════════════════════════════
-  const tags = [];
-  const totalPools = eqHighCount + eqLowCount;
-  if (atrRatio < 0.72 || rangeRatio < 0.60)     tags.push({ label: 'COILING', type: 'compression' });
-  if (bodyExpansion > 1.5)                       tags.push({ label: 'BODY EXPANDING', type: 'breakout' });
-  if (relVol > 1.4)                              tags.push({ label: 'VOL RETURNING', type: 'breakout' });
-  if (bullPressureSwings)                        tags.push({ label: 'HIGHER LOWS', type: 'liquidity' });
-  if (bearPressureSwings)                        tags.push({ label: 'LOWER HIGHS', type: 'squeeze' });
-  if (totalPools >= 2)                           tags.push({ label: totalPools+' LIQ POOLS', type: 'liquidity' });
-  if (distInATRs < 1.5)                          tags.push({ label: 'POOL CLOSE ×'+distInATRs.toFixed(1)+'ATR', type: 'liquidity' });
-  if (openFVGs.length > 0)                       tags.push({ label: 'OPEN FVG ×'+openFVGs.length, type: 'liquidity' });
-  if (absFunding > 0.03)                         tags.push({ label: funding > 0 ? 'FUND+'+funding.toFixed(3)+'%':'FUND'+funding.toFixed(3)+'%', type:'squeeze' });
-  if (lsExtreme > 1.4)                           tags.push({ label: lsRatio > 1 ? 'LONGS CROWDED':'SHORTS CROWDED', type:'squeeze' });
-  if (lean !== 'neutral')                        tags.push({ label: lean+' LEAN', type: lean==='BULL'?'breakout':'squeeze' });
-
-  // ════════════════════════════════════════════════════════════
-  // NARRATIVE
-  // ════════════════════════════════════════════════════════════
-  const narrativeParts = [];
-  if (atrRatio < 0.72)        narrativeParts.push(`ATR contracted to ${(atrRatio*100).toFixed(0)}% of baseline — spring loading.`);
-  if (rangeRatio < 0.60)      narrativeParts.push(`Price range at ${(rangeRatio*100).toFixed(0)}% of prior range.`);
-  if (bodyExpansion > 1.5)    narrativeParts.push(`Candle bodies expanding ${bodyExpansion.toFixed(1)}× — momentum building.`);
-  if (relVol > 1.2)           narrativeParts.push(`Volume ${(relVol*100).toFixed(0)}% of baseline — participation returning.`);
-  if (bullPressureSwings)     narrativeParts.push(`Higher lows forming inside range — bull pressure building.`);
-  if (bearPressureSwings)     narrativeParts.push(`Lower highs inside range — bear pressure building.`);
-  if (distInATRs < 2.0)       narrativeParts.push(`${totalPools} liquidity pool${totalPools!==1?'s':''} within ${distInATRs.toFixed(1)} ATR — sweep risk.`);
-  if (openFVGs.length > 0)    narrativeParts.push(`${openFVGs.length} open FVG${openFVGs.length>1?'s':''} acting as magnet.`);
-  if (absFunding > 0.02)      narrativeParts.push(`Funding ${funding>0?'+':''}${funding.toFixed(4)}% — ${funding>0?'shorts will squeeze on rally':'longs will squeeze on drop'}.`);
-  if (lsExtreme > 1.4)        narrativeParts.push(`L/S ${lsRatio.toFixed(2)} — ${lsRatio>1?'crowded longs':'crowded shorts'}, squeeze risk elevated.`);
-  if (lean !== 'neutral')     narrativeParts.push(`Directional lean: ${lean}.`);
-  const narrative = narrativeParts.join(' ');
-
-  // volScore kept for UI compat (ranked card displays it), compute simply
-  const volR5   = vols_c.slice(-5).filter(v=>v>0).reduce((a,b)=>a+b,0) / 5;
-  const volO20  = vols_c.slice(-25,-5).filter(v=>v>0).reduce((a,b)=>a+b,0) / 20;
-  const volRatio = volO20 > 0 ? volR5 / volO20 : 1;
-  let volScore = 0;
-  if      (relVol > 2.0) volScore = 100;
-  else if (relVol > 1.5) volScore = 80;
-  else if (relVol > 1.2) volScore = 60;
-  else if (relVol > 1.0) volScore = 40;
-  else if (volRatio < 0.70) volScore = 30; // still reward dry-up (quiet before storm)
-  else if (volRatio < 0.90) volScore = 15;
-
-  return {
-    score: composite,
-    signal,
-    tags: tags.slice(0, 7),
-    explanation: narrative || 'Pre-burst conditions building.',
-    // Pillar scores for ranked card display
-    comprScore:   Math.round(coilScore),       // reuse old field name for UI compat
-    liqScore:     Math.round(proxScore),       // reuse old field name for UI compat
-    derivScore:   Math.round(derivScore),
-    volScore:     Math.round(volScore),        // now = momentum participation
-    // Extra breakdown fields for tooltip
-    momentumScore: Math.round(momentumScore),
-    // Raw values for meta row
-    er: er20, atrRatio, rangeRatio, totalPools, openFVGs: openFVGs.length,
-    funding, lsRatio, volRatio,
-    bodyExpansion, relVol, distInATRs,
-    lean,
-    // Direction for heatmap colouring — key change vs old radar
-    bias: leanBias,
-    classification: signal,
-    classType: 'radar',
-    marketState: 'PRE-BURST',
-    structureType: 'radar',
-    setupType: 'radar',
-    entryQuality: '—',
-    reasonCode: 'PREBURST_SCORE',
-    sweepDetected: false,
-    validSetup: false,
-  };
-}
-
-// ═══════════════════════════════════════════════════════════════
 // MAIN SCAN RUNNER
 // ═══════════════════════════════════════════════════════════════
 async function runMarketScan() {
@@ -5060,20 +4663,16 @@ async function runMarketScan() {
         // null → skip immediately. DO NOT score. DO NOT rank.
         // DO NOT show in ranked list or heatmap.
         // ═══════════════════════════════════════════════════════
-        const result = _scanMode === 'radar'
-          ? radarScore(candles, derivs, tickers[sym]?.vol || 0)
-          : analyzeCoin(candles, derivs);
+        const result = analyzeCoin(candles, derivs);
 
-        // HARD GATE — null means rejected
+        // HARD GATE — null means the pipeline rejected this coin
         if (result === null) {
           rejected++;
-          const reason = _scanMode === 'radar' ? 'RADAR_INSUFFICIENT_DATA' : (analyzeCoin._lastRejectReason || 'PIPELINE_REJECT');
+          // Capture the specific rejection reason for pipeline diagnostics
+          const reason = analyzeCoin._lastRejectReason || 'PIPELINE_REJECT';
           rejectTally[reason] = (rejectTally[reason] || 0) + 1;
           return;
         }
-
-        // Radar mode: collect all coins — percentile rescale after loop handles filtering
-        // (pre-filtering before rescale would bias the percentile distribution)
 
         result.symbol = sym;
         result.price  = candles[candles.length-1].close;
@@ -5091,42 +4690,6 @@ async function runMarketScan() {
     if (_scanCancelled) { pipeUpdateStep('pipe-s4','⊘ SCAN CANCELLED','warn','User cancelled.'); return; }
 
     scanResults.sort((a,b)=>b.score-a.score);
-
-    // RADAR PERCENTILE RESCALE
-    // Raw pillar scores cluster in a tight band (50-65) because most of the market
-    // sits in a "moderate" state on any given day. Absolute thresholds have no
-    // discriminating power across timeframes or market regimes.
-    // Fix: percentile-rank each coin's raw score against the full scan population.
-    // Top coin always scores ~95. Bottom coin always scores ~5. Distribution always spreads.
-    // This makes HIGH ENERGY meaningful — it means "most coiled relative to the market today",
-    // not "hit an arbitrary absolute threshold".
-    if (_scanMode === 'radar' && scanResults.length > 1) {
-      const rawScores = scanResults.map(r => r.score);
-      scanResults.forEach((r, idx) => {
-        // percentile = fraction of coins scoring BELOW this coin
-        const below = rawScores.filter(s => s < r.score).length;
-        const pct   = below / (scanResults.length - 1); // 0.0 → 1.0
-        // Map to 5–95 range with a slight curve to push top coins higher
-        r.score = Math.round(5 + pct * 90);
-        // Rescale pillar sub-scores proportionally for display consistency
-        const ratio = rawScores[idx] > 0 ? r.score / rawScores[idx] : 1;
-        if (r.comprScore != null) r.comprScore = Math.min(100, Math.round(r.comprScore * ratio));
-        if (r.liqScore   != null) r.liqScore   = Math.min(100, Math.round(r.liqScore   * ratio));
-        if (r.derivScore != null) r.derivScore = Math.min(100, Math.round(r.derivScore * ratio));
-        if (r.volScore   != null) r.volScore   = Math.min(100, Math.round(r.volScore   * ratio));
-      });
-      // Re-sort after rescale (order preserved but scores now spread 5–95)
-      scanResults.sort((a,b) => b.score - a.score);
-      // Re-assign signal labels based on rescaled scores
-      scanResults.forEach(r => {
-        if (r.score >= 80)      r.signal = r.signal !== 'WATCH' ? r.signal : 'TIGHT COIL';
-        else if (r.score >= 65) r.signal = r.signal !== 'WATCH' ? r.signal : 'WATCH';
-        r.classification = r.signal;
-      });
-      // Keep only top 60 — below that the signal is too weak to act on
-      if (scanResults.length > 60) scanResults.splice(60);
-    }
-
     _scanResults = scanResults;
 
     const highPriority  = scanResults.filter(r=>r.score>=80).length;
@@ -5142,77 +4705,49 @@ async function runMarketScan() {
     pipeUpdateStep('pipe-s4','✓ ANALYSIS COMPLETE','ok',
       `<span class="hl">${scanResults.length} coins passed all gates</span> · <span class="red">${rejected} rejected by pipeline</span> · <span class="red">${failed} failed fetch</span>`);
 
-    if (_scanMode === 'radar') {
-      // Radar-specific pipeline output
-      const highRadar = scanResults.filter(r=>r.score>=75).length;
-      const midRadar  = scanResults.filter(r=>r.score>=50&&r.score<75).length;
-      const coilCount = scanResults.filter(r=>r.signal==='TIGHT COIL'||r.signal==='COIL + LIQ').length;
-      const sqzCount  = scanResults.filter(r=>r.signal==='SQUEEZE BUILD').length;
-      const liqCount  = scanResults.filter(r=>r.signal==='LIQ MAGNET').length;
-      pipeAddStep(5,'⚡','RADAR ENGINE OUTPUT','info',
-        `<div style="margin-bottom:4px">
-           <span class="pipe-badge green">${highRadar} HIGH ENERGY ≥70</span>
-           <span class="pipe-badge amber">${midRadar} BUILDING 50-69</span>
-           <span class="pipe-badge blue">${coilCount} COIL+LIQ</span>
-           <span class="pipe-badge red">${sqzCount} SQUEEZE BUILD</span>
-           <span class="pipe-badge amber">${liqCount} LIQ MAGNET</span>
-           · <span class="hl">${new Date().toISOString().slice(11,19)} UTC</span>
-         </div>
-         <div style="margin-top:5px;padding-top:5px;border-top:1px solid rgba(255,255,255,0.06);font-size:8px;color:var(--muted);letter-spacing:0.06em">
-           No structure gate. No direction gate. Scoring: Compression 40% · Liquidity 25% · Derivatives 20% · Volume 15%
-         </div>`,'pipe-s5');
-      setTimeout(() => {
-        pipeCollapse(`⚡ RADAR SCAN · ${scanResults.length} coins · ${highRadar} HIGH ENERGY · ${rejected} filtered · ${tf.toUpperCase()} · ${new Date().toISOString().slice(11,19)} UTC`);
-      }, 1200);
-    } else {
-      // Setups-mode pipeline output (original)
-      pipeAddStep(5,'◈','DECISION ENGINE OUTPUT','info',
-        `<div style="margin-bottom:4px">
-           <span class="pipe-badge green">${highPriority} HIGH PRIORITY ≥80</span>
-           <span class="pipe-badge amber">${watchlist} WATCHLIST 65-79</span>
-           <span class="pipe-badge amber">${breakoutSets} BREAKOUT</span>
-           <span class="pipe-badge red">${squeezeSets} SQUEEZE</span>
-           <span class="pipe-badge blue">${trendSets} TREND CONT.</span>
-           <span class="pipe-badge green">${bullBias} BULL</span>
-           <span class="pipe-badge red">${bearBias} BEAR</span>
-           · <span class="hl">${new Date().toISOString().slice(11,19)} UTC</span>
-         </div>
-         <div style="margin-top:5px;padding-top:5px;border-top:1px solid rgba(255,255,255,0.06);font-size:8px;color:var(--muted);letter-spacing:0.06em">
-           GATE STATS ·
-           <span style="color:var(--red)">${rejected} rejected</span> ·
-           <span style="color:var(--muted)">${failed} fetch fail</span> ·
-           <span style="color:var(--green)">${scanResults.length} passed</span>
-           — pipeline enforced: structure → setup → validate → entry → score
-         </div>
-         <div style="margin-top:4px;font-size:8px;color:var(--muted);letter-spacing:0.06em">
-           REJECTION BREAKDOWN ·
-           <span style="color:var(--red)">${(rejectTally['INVALID_STRUCTURE']||0)+(rejectTally['NO_CLEAN_SETUP']||0)} NO STRUCT/SETUP</span> ·
-           <span style="color:var(--orange)">${(rejectTally['CONTRA_TREND_LONG_IN_DOWNTREND']||0)+(rejectTally['CONTRA_TREND_SHORT_IN_UPTREND']||0)+(rejectTally['BULL_BIAS_BEAR_BOS']||0)+(rejectTally['BEAR_BIAS_BULL_BOS']||0)+(rejectTally['BULL_BIAS_BEAR_TREND']||0)+(rejectTally['BEAR_BIAS_BULL_TREND']||0)+(rejectTally['BULL_BIAS_IN_TREND_DOWN']||0)+(rejectTally['BEAR_BIAS_IN_TREND_UP']||0)} CONTRA-TREND</span> ·
-           <span style="color:var(--gold)">${rejectTally['LATE_ENTRY_REJECTED']||0} LATE ENTRY</span> ·
-           <span style="color:var(--muted)">${(rejectTally['NO_VOLATILITY']||0)+(rejectTally['DEAD_MARKET']||0)} LOW VOL</span> ·
-           <span style="color:var(--muted)">${(rejectTally['BULL_IN_PREMIUM_NO_PULLBACK']||0)+(rejectTally['BEAR_IN_DISCOUNT_NO_PULLBACK']||0)} PREMIUM/DISCOUNT</span> ·
-           <span style="color:var(--muted)">${rejectTally['SCORE_BELOW_THRESHOLD']||0} LOW SCORE</span>
-         </div>
-         <div style="margin-top:4px;font-size:8px;color:var(--muted);letter-spacing:0.06em">
-           LIQUIDITY BREAKDOWN ·
-           <span style="color:var(--green)">${reasonTally.VALID_SETUP||0} VALID SETUP</span> ·
-           <span style="color:var(--gold)">${reasonTally.SWEEP_NO_BOS||0} SWEEP/NO BOS</span> ·
-           <span style="color:var(--blue)">${reasonTally.INDUCEMENT_ONLY||0} INDUCEMENT</span> ·
-           <span style="color:var(--muted)">${(reasonTally.NO_STRUCTURE||0)+(reasonTally.STRUCTURE_NO_LIQUIDITY||0)} NO STRUCT</span>
-         </div>`,'pipe-s5');
-      setTimeout(() => {
-        pipeCollapse(`✓ SCAN COMPLETE · ${scanResults.length} passed · ${highPriority} HIGH PRIORITY · ${watchlist} WATCHLIST · ${rejected} rejected · ${tf.toUpperCase()} · ${new Date().toISOString().slice(11,19)} UTC`);
-      }, 1200);
-    }
+    pipeAddStep(5,'◈','DECISION ENGINE OUTPUT','info',
+      `<div style="margin-bottom:4px">
+         <span class="pipe-badge green">${highPriority} HIGH PRIORITY ≥80</span>
+         <span class="pipe-badge amber">${watchlist} WATCHLIST 65-79</span>
+         <span class="pipe-badge amber">${breakoutSets} BREAKOUT</span>
+         <span class="pipe-badge red">${squeezeSets} SQUEEZE</span>
+         <span class="pipe-badge blue">${trendSets} TREND CONT.</span>
+         <span class="pipe-badge green">${bullBias} BULL</span>
+         <span class="pipe-badge red">${bearBias} BEAR</span>
+         · <span class="hl">${new Date().toISOString().slice(11,19)} UTC</span>
+       </div>
+       <div style="margin-top:5px;padding-top:5px;border-top:1px solid rgba(255,255,255,0.06);font-size:8px;color:var(--muted);letter-spacing:0.06em">
+         GATE STATS ·
+         <span style="color:var(--red)">${rejected} rejected</span> ·
+         <span style="color:var(--muted)">${failed} fetch fail</span> ·
+         <span style="color:var(--green)">${scanResults.length} passed</span>
+         — pipeline enforced: structure → setup → validate → entry → score
+       </div>
+       <div style="margin-top:4px;font-size:8px;color:var(--muted);letter-spacing:0.06em">
+         REJECTION BREAKDOWN ·
+         <span style="color:var(--red)">${(rejectTally['INVALID_STRUCTURE']||0)+(rejectTally['NO_CLEAN_SETUP']||0)} NO STRUCT/SETUP</span> ·
+         <span style="color:var(--orange)">${(rejectTally['CONTRA_TREND_LONG_IN_DOWNTREND']||0)+(rejectTally['CONTRA_TREND_SHORT_IN_UPTREND']||0)+(rejectTally['BULL_BIAS_BEAR_BOS']||0)+(rejectTally['BEAR_BIAS_BULL_BOS']||0)+(rejectTally['BULL_BIAS_BEAR_TREND']||0)+(rejectTally['BEAR_BIAS_BULL_TREND']||0)} CONTRA-TREND</span> ·
+         <span style="color:var(--gold)">${rejectTally['LATE_ENTRY_REJECTED']||0} LATE ENTRY</span> ·
+         <span style="color:var(--muted)">${(rejectTally['NO_VOLATILITY']||0)+(rejectTally['DEAD_MARKET']||0)} LOW VOL</span> ·
+         <span style="color:var(--muted)">${(rejectTally['BULL_IN_PREMIUM_NO_PULLBACK']||0)+(rejectTally['BEAR_IN_DISCOUNT_NO_PULLBACK']||0)} PREMIUM/DISCOUNT</span> ·
+         <span style="color:var(--muted)">${rejectTally['SCORE_BELOW_THRESHOLD']||0} LOW SCORE</span>
+       </div>
+       <div style="margin-top:4px;font-size:8px;color:var(--muted);letter-spacing:0.06em">
+         LIQUIDITY BREAKDOWN ·
+         <span style="color:var(--green)">${reasonTally.VALID_SETUP||0} VALID SETUP</span> ·
+         <span style="color:var(--gold)">${reasonTally.SWEEP_NO_BOS||0} SWEEP/NO BOS</span> ·
+         <span style="color:var(--blue)">${reasonTally.INDUCEMENT_ONLY||0} INDUCEMENT</span> ·
+         <span style="color:var(--muted)">${(reasonTally.NO_STRUCTURE||0)+(reasonTally.STRUCTURE_NO_LIQUIDITY||0)} NO STRUCT</span>
+       </div>`,'pipe-s5');
+
+    // Collapse log to summary
+    setTimeout(() => {
+      pipeCollapse(`✓ SCAN COMPLETE · ${scanResults.length} passed · ${highPriority} HIGH PRIORITY · ${watchlist} WATCHLIST · ${rejected} rejected · ${tf.toUpperCase()} · ${new Date().toISOString().slice(11,19)} UTC`);
+    }, 1200);
 
     document.getElementById('stat-scanned').textContent=afterBias.length;
     document.getElementById('stat-valid').textContent=scanResults.length;
-    const _highCount = _scanMode === 'radar'
-      ? scanResults.filter(r=>r.score>=75).length
-      : highPriority;
-    document.getElementById('stat-high').textContent=_highCount;
-    const _highLabel = document.getElementById('stat-high-label');
-    if (_highLabel) _highLabel.firstChild.textContent = (_scanMode==='radar' ? 'HIGH ENERGY ' : 'HIGH PRIORITY ');
+    document.getElementById('stat-high').textContent=highPriority;
     document.getElementById('stat-tf').textContent=tf.toUpperCase();
     document.getElementById('stat-time').textContent=new Date().toISOString().slice(11,19)+' UTC';
     document.getElementById('scanner-stats').style.display='flex';
@@ -5243,42 +4778,14 @@ async function runMarketScan() {
 // ═══════════════════════════════════════════════════════════════
 function getFilteredResults() {
   let r = [..._scanResults];
-  if (_scanMode === 'radar') {
-    // Radar filters: by energy tier and signal type
-    if (_currentFilter === 'high_priority') r = r.filter(x => x.score >= 75);
-    else if (_currentFilter === 'breakout')  r = r.filter(x => x.signal === 'COIL + LIQ' || x.signal === 'TIGHT COIL');
-    else if (_currentFilter === 'squeeze')   r = r.filter(x => x.signal === 'SQUEEZE BUILD');
-    else if (_currentFilter === 'trend')     r = r.filter(x => x.signal === 'LIQ MAGNET' || x.signal === 'VOL DRY + COIL');
-  } else {
-    if (_currentFilter === 'high_priority') r=r.filter(x=>x.score>=80);
-    else if (_currentFilter === 'breakout') r=r.filter(x=>x.classType==='breakout');
-    else if (_currentFilter === 'squeeze') r=r.filter(x=>x.classType==='squeeze');
-    else if (_currentFilter === 'trend')   r=r.filter(x=>x.classType==='trend');
-  }
+  if (_currentFilter === 'high_priority') r=r.filter(x=>x.score>=80);
+  else if (_currentFilter === 'breakout') r=r.filter(x=>x.classType==='breakout');
+  else if (_currentFilter === 'squeeze') r=r.filter(x=>x.classType==='squeeze');
+  else if (_currentFilter === 'trend')   r=r.filter(x=>x.classType==='trend');
   return r;
 }
 
-function _updatePillLabels() {
-  const p = document.getElementById('pill-high');
-  const b = document.getElementById('pill-breakout');
-  const s = document.getElementById('pill-squeeze');
-  const t = document.getElementById('pill-trend');
-  if (!p) return;
-  if (_scanMode === 'radar') {
-    p.textContent = '⚡ HIGH ENERGY';
-    b.textContent = 'COIL + LIQ';
-    s.textContent = 'SQUEEZE BUILD';
-    t.textContent = 'LIQ MAGNET';
-  } else {
-    p.textContent = '⬆ HIGH PRIORITY';
-    b.textContent = 'BREAKOUT';
-    s.textContent = 'SQUEEZE';
-    t.textContent = 'TREND';
-  }
-}
-
 function renderCurrentView() {
-  _updatePillLabels();
   const results = getFilteredResults();
   if (_currentView === 'heatmap') renderHeatmap(results);
   else renderRankedList(results);
@@ -5310,23 +4817,6 @@ function renderHeatmap(results) {
 
   const W = wrap.offsetWidth || 800;
   const legendH = 32;
-
-  // Update legend to match current scan mode
-  const _legendLeft  = document.getElementById('legend-left');
-  const _legendBar   = document.getElementById('legend-bar');
-  const _legendRight = document.getElementById('legend-right');
-  const _legendSub   = document.getElementById('legend-sub');
-  if (_scanMode === 'radar') {
-    if (_legendLeft)  { _legendLeft.textContent = '◎ LOW ENERGY'; _legendLeft.style.color = 'rgba(200,120,40,0.8)'; }
-    if (_legendBar)   _legendBar.style.background = 'linear-gradient(90deg,rgba(150,80,20,0.6),rgba(255,160,40,0.75),rgba(255,200,20,0.9))';
-    if (_legendRight) { _legendRight.textContent = '⚡ HIGH ENERGY'; _legendRight.style.color = 'rgba(255,160,40,1)'; }
-    if (_legendSub)   _legendSub.textContent = 'SIZE = 24H VOLUME · COLOR = ENERGY SCORE · ⚡ = HIGH · ◎ = MID';
-  } else {
-    if (_legendLeft)  { _legendLeft.textContent = '◀ BEARISH'; _legendLeft.style.color = 'var(--red)'; }
-    if (_legendBar)   _legendBar.style.background = 'linear-gradient(90deg,rgba(255,40,40,0.8),rgba(200,160,50,0.7),rgba(0,230,118,0.85))';
-    if (_legendRight) { _legendRight.textContent = 'BULLISH ▶'; _legendRight.style.color = 'var(--green)'; }
-    if (_legendSub)   _legendSub.textContent = 'SIZE = 24H VOLUME · COLOR = BIAS + SCORE';
-  }
   const totalH = Math.max(400, Math.min(600, results.length * 3));
   wrap.style.height = (totalH + legendH) + 'px';
 
@@ -5356,18 +4846,10 @@ function renderHeatmap(results) {
 
   // Direction-aware color: GREEN = bullish high-confidence, RED = bearish high-confidence
   // Gold = neutral/mixed regardless of score. Dim = low confidence.
-  const scoreToColor = (score, bias, classType) => {
+  const scoreToColor = (score, bias) => {
     const isBull = bias && (bias.includes('bull'));
     const isBear = bias && (bias.includes('bear'));
     const alpha = 0.45 + (score / 100) * 0.45; // opacity scales with score
-
-    // RADAR MODE: color = energy intensity, not direction
-    // High energy (≥70) = vivid orange. Mid (50-69) = amber. Low = dim brown.
-    if (classType === 'radar') {
-      if (score >= 70) return `rgba(255,${Math.round(120+(score-70)*2.5)},20,${alpha})`;
-      if (score >= 55) return `rgba(255,${Math.round(160+(score-55)*3)},40,${alpha - 0.05})`;
-      return `rgba(200,120,40,${alpha - 0.15})`;
-    }
 
     if (isBull) {
       // Bullish: dark green (low score) → vivid green (high score)
@@ -5400,15 +4882,10 @@ function renderHeatmap(results) {
       const w = Math.floor(rawWidths[ci] * scale);
       const block = document.createElement('div');
       block.className = 'heatmap-block';
-      block.style.cssText = `left:${xOffset}px;top:${yOffset}px;width:${w}px;height:${rowH}px;background:${scoreToColor(coin.score, coin.bias, coin.classType)};`;
+      block.style.cssText = `left:${xOffset}px;top:${yOffset}px;width:${w}px;height:${rowH}px;background:${scoreToColor(coin.score, coin.bias)};`;
       const fontSize = Math.max(8, Math.min(16, w/6));
-      const isRadarBlock = coin.classType === 'radar';
-      const biasIcon = isRadarBlock
-        ? (coin.score >= 70 ? '⚡' : coin.score >= 55 ? '◎' : '·')
-        : (coin.bias && coin.bias.includes('bull') ? '▲' : coin.bias && coin.bias.includes('bear') ? '▼' : '◆');
-      const biasIconColor = isRadarBlock
-        ? (coin.score >= 70 ? 'rgba(255,160,40,0.95)' : coin.score >= 55 ? 'rgba(255,200,80,0.8)' : 'rgba(160,100,40,0.6)')
-        : (coin.bias && coin.bias.includes('bull') ? 'rgba(0,230,118,0.9)' : coin.bias && coin.bias.includes('bear') ? 'rgba(255,80,80,0.9)' : 'rgba(255,213,79,0.8)');
+      const biasIcon = coin.bias && coin.bias.includes('bull') ? '▲' : coin.bias && coin.bias.includes('bear') ? '▼' : '◆';
+      const biasIconColor = coin.bias && coin.bias.includes('bull') ? 'rgba(0,230,118,0.9)' : coin.bias && coin.bias.includes('bear') ? 'rgba(255,80,80,0.9)' : 'rgba(255,213,79,0.8)';
       block.innerHTML = `
         <span class="heatmap-block-sym" style="font-size:${fontSize}px">${coin.symbol}</span>
         <span class="heatmap-block-score" style="font-size:${Math.max(7,fontSize-2)}px">${coin.score}</span>
@@ -5419,29 +4896,13 @@ function renderHeatmap(results) {
         tt.style.top=(e.clientY-10)+'px';
         tt.classList.add('show');
         document.getElementById('ht-sym').textContent=coin.symbol;
-        document.getElementById('ht-score').textContent=coin.score + (coin.score>=70&&_scanMode==='radar'?' ⚡':coin.score>=80?' ★':'');
-        document.getElementById('ht-class').textContent=coin.classification||coin.signal||'—';
-        if (_scanMode === 'radar') {
-          document.getElementById('ht-state').textContent='RADAR';
-          document.getElementById('ht-bias').textContent=[
-            coin.comprScore!=null?'C:'+coin.comprScore:'',
-            coin.liqScore!=null?'L:'+coin.liqScore:'',
-            coin.derivScore!=null?'D:'+coin.derivScore:'',
-            coin.volScore!=null?'V:'+coin.volScore:'',
-          ].filter(Boolean).join(' · ');
-        } else {
-          document.getElementById('ht-state').textContent=(coin.structureType||coin.marketState||'—').toUpperCase();
-          document.getElementById('ht-bias').textContent=coin.bias.toUpperCase();
-        }
+        document.getElementById('ht-score').textContent=coin.score + (coin.score>=80?' ★':'');
+        document.getElementById('ht-class').textContent=coin.classification;
+        document.getElementById('ht-state').textContent=(coin.structureType||coin.marketState||'—').toUpperCase();
+        document.getElementById('ht-bias').textContent=coin.bias.toUpperCase();
         document.getElementById('ht-vol').textContent=fmtCompact(coin.vol);
         const rcEl = document.getElementById('ht-rc');
-        if (rcEl) {
-          if (_scanMode === 'radar') {
-            rcEl.textContent = (coin.tags||[]).map(t=>t.label||t).join(' · ') || '—';
-          } else {
-            rcEl.textContent = (coin.setupType ? coin.setupType.toUpperCase()+' · ' : '') + (coin.entryQuality||'');
-          }
-        }
+        if (rcEl) rcEl.textContent = (coin.setupType ? coin.setupType.toUpperCase()+' · ' : '') + (coin.entryQuality||'');
       });
       block.addEventListener('mouseleave', () => {
         document.getElementById('heatmap-tooltip').classList.remove('show');
@@ -5473,96 +4934,56 @@ function renderRankedList(results) {
   }
 
   results.slice(0, 80).forEach((coin, idx) => {
-    const isRadar = coin.classType === 'radar';
-
-    // Tiering
-    const highThr  = isRadar ? 75 : 80;
-    const midThr   = isRadar ? 50 : 65;
-    const isHigh   = coin.score >= highThr;
-    const isMid    = coin.score >= midThr && coin.score < highThr;
+    // New tiering: HIGH_PRIORITY ≥80, WATCHLIST 65-79 (IGNORE filtered out already)
+    const isHigh   = coin.score >= 80;
+    const isMid    = coin.score >= 65 && coin.score < 80;
     const scoreColor = isHigh ? 'var(--green)' : isMid ? 'var(--gold)' : 'var(--sub)';
     const barColor   = isHigh ? '#00e676'       : isMid ? '#ffd54f'    : '#5a6470';
     const tier       = isHigh ? 'high'          : isMid ? 'mid'        : 'low';
-    const tierLabel  = isRadar
-      ? (isHigh ? '⚡ HIGH ENERGY' : '◎ BUILDING')
-      : (isHigh ? 'HIGH PRIORITY' : 'WATCHLIST');
+    const tierLabel  = isHigh ? 'HIGH PRIORITY' : 'WATCHLIST';
     const tierBgCol  = isHigh ? 'rgba(0,230,118,0.12)' : 'rgba(255,213,79,0.10)';
     const tierTxtCol = isHigh ? 'var(--green)' : 'var(--gold)';
 
+    // Reason code badge
+    const rcColor = UI.reasonBadgeColor(coin.reasonCode);
+    const rcLabel = coin.reasonCode || 'UNKNOWN';
+    const sweepBadge = coin.sweepDetected ? `<span class="scan-tag liquidity" style="background:rgba(0,230,118,0.15);color:var(--green);border:1px solid rgba(0,230,118,0.3)">⚡ LIQ SWEEP</span>` : '';
+    const validBadge = coin.validSetup    ? `<span class="scan-tag structure" style="background:rgba(0,230,118,0.1);color:var(--green)">✓ VALID SETUP</span>` : '';
+    // Structure + Setup type badges (new pipeline outputs)
+    const stBadge = coin.structureType ? `<span class="scan-tag neutral" style="color:var(--blue);border-color:rgba(64,196,255,0.25)">◈ ${coin.structureType.toUpperCase()}</span>` : '';
+    const spBadge = coin.setupType && coin.setupType !== 'none' ? `<span class="scan-tag ${coin.setupType==='breakout'?'breakout':coin.setupType==='reversal'?'squeeze':'trend'}">${coin.setupType.toUpperCase()}</span>` : '';
+
     const card = document.createElement('div');
     card.className = `coin-card tier-${tier}`;
-
-    if (isRadar) {
-      // ── RADAR CARD ────────────────────────────────────────────
-      const signalColor = coin.signal==='TIGHT COIL'||coin.signal==='COIL + LIQ' ? 'var(--green)'
-        : coin.signal==='SQUEEZE BUILD' ? 'var(--red)'
-        : coin.signal==='LIQ MAGNET'    ? 'var(--blue)'
-        : 'var(--gold)';
-      card.innerHTML = `
-        <div class="coin-score-bar"><div class="coin-score-fill" style="width:${coin.score}%;background:${barColor}"></div></div>
-        <div class="coin-card-top">
-          <div class="coin-left">
-            <div class="rank-badge ${idx<3?'top3':''}">${idx+1}</div>
-            <div class="coin-sym">${coin.symbol}</div>
-            <span class="coin-class-badge" style="background:rgba(255,213,79,0.1);color:${signalColor};border-color:${signalColor}33">⚡ ${coin.signal||'WATCH'}</span>
-          </div>
-          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
-            <div class="coin-score-block">
-              <div class="coin-score-num" style="color:${scoreColor}">${coin.score}</div>
-              <div class="coin-score-label">ENERGY</div>
-            </div>
-            <div style="font-size:7px;padding:1px 5px;background:${tierBgCol};color:${tierTxtCol};letter-spacing:0.1em">${tierLabel}</div>
-          </div>
+    card.innerHTML = `
+      <div class="coin-score-bar"><div class="coin-score-fill" style="width:${coin.score}%;background:${barColor}"></div></div>
+      <div class="coin-card-top">
+        <div class="coin-left">
+          <div class="rank-badge ${idx<3?'top3':''}">${idx+1}</div>
+          <div class="coin-sym">${coin.symbol}</div>
+          <span class="coin-state-badge state-${coin.marketState||''}">${coin.marketState||'—'}</span>
+          <span class="coin-class-badge class-${coin.classType}">${coin.classification}</span>
         </div>
-        <div class="coin-tags">${(coin.tags||[]).map(t=>`<span class="scan-tag ${t.type||'neutral'}">${t.label}</span>`).join('')}</div>
-        <div class="coin-explanation">${coin.explanation||'—'}</div>
-        <div class="coin-meta">
-          <div class="coin-meta-item">COMPR:<span class="coin-meta-val" style="color:var(--green)">${coin.comprScore||0}</span></div>
-          <div class="coin-meta-item">LIQ:<span class="coin-meta-val" style="color:var(--blue)">${coin.liqScore||0}</span></div>
-          <div class="coin-meta-item">DERIV:<span class="coin-meta-val" style="color:var(--gold)">${coin.derivScore||0}</span></div>
-          <div class="coin-meta-item">VOL:<span class="coin-meta-val">${coin.volScore||0}</span></div>
-          <div class="coin-meta-item">ER:<span class="coin-meta-val">${(coin.er||0).toFixed(2)}</span></div>
-          <div class="coin-meta-item">FUND:<span class="coin-meta-val ${(coin.funding||0)>0.05?'down':(coin.funding||0)<-0.02?'up':''}">${(coin.funding||0).toFixed(3)}%</span></div>
-          <div class="coin-meta-item">VOL$:<span class="coin-meta-val">${fmtCompact(coin.vol)}</span></div>
-        </div>`;
-    } else {
-      // ── SETUPS CARD (original) ────────────────────────────────
-      const rcColor = UI.reasonBadgeColor(coin.reasonCode);
-      const rcLabel = coin.reasonCode || 'UNKNOWN';
-      const sweepBadge = coin.sweepDetected ? `<span class="scan-tag liquidity" style="background:rgba(0,230,118,0.15);color:var(--green);border:1px solid rgba(0,230,118,0.3)">⚡ LIQ SWEEP</span>` : '';
-      const validBadge = coin.validSetup    ? `<span class="scan-tag structure" style="background:rgba(0,230,118,0.1);color:var(--green)">✓ VALID SETUP</span>` : '';
-      const stBadge = coin.structureType ? `<span class="scan-tag neutral" style="color:var(--blue);border-color:rgba(64,196,255,0.25)">◈ ${coin.structureType.toUpperCase()}</span>` : '';
-      const spBadge = coin.setupType && coin.setupType !== 'none' ? `<span class="scan-tag ${coin.setupType==='breakout'?'breakout':coin.setupType==='reversal'?'squeeze':'trend'}">${coin.setupType.toUpperCase()}</span>` : '';
-      card.innerHTML = `
-        <div class="coin-score-bar"><div class="coin-score-fill" style="width:${coin.score}%;background:${barColor}"></div></div>
-        <div class="coin-card-top">
-          <div class="coin-left">
-            <div class="rank-badge ${idx<3?'top3':''}">${idx+1}</div>
-            <div class="coin-sym">${coin.symbol}</div>
-            <span class="coin-state-badge state-${coin.marketState||''}">${coin.marketState||'—'}</span>
-            <span class="coin-class-badge class-${coin.classType}">${coin.classification}</span>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+          <div class="coin-score-block">
+            <div class="coin-score-num" style="color:${scoreColor}">${coin.score}</div>
+            <div class="coin-score-label">SCORE</div>
           </div>
-          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
-            <div class="coin-score-block">
-              <div class="coin-score-num" style="color:${scoreColor}">${coin.score}</div>
-              <div class="coin-score-label">SCORE</div>
-            </div>
-            <div style="font-size:7px;padding:1px 5px;background:${tierBgCol};color:${tierTxtCol};letter-spacing:0.1em">${tierLabel}</div>
-            <div style="font-size:7px;color:${rcColor};letter-spacing:0.08em;text-align:right">${rcLabel.replace(/_/g,' ')}</div>
-          </div>
+          <div style="font-size:7px;padding:1px 5px;background:${tierBgCol};color:${tierTxtCol};letter-spacing:0.1em">${tierLabel}</div>
+          <div style="font-size:7px;color:${rcColor};letter-spacing:0.08em;text-align:right">${rcLabel.replace(/_/g,' ')}</div>
         </div>
-        <div class="coin-tags">${sweepBadge}${validBadge}${stBadge}${spBadge}${coin.tags.map(t=>`<span class="scan-tag ${t.type}">${t.label}</span>`).join('')}</div>
-        <div class="coin-explanation">${coin.explanation}</div>
-        <div class="coin-meta">
-          <div class="coin-meta-item">ER:<span class="coin-meta-val">${(coin.er||0).toFixed(2)}</span></div>
-          <div class="coin-meta-item">TQI:<span class="coin-meta-val">${(coin.tqi||0).toFixed(2)}</span></div>
-          <div class="coin-meta-item">FUND:<span class="coin-meta-val ${(coin.funding||0)>0.05?'down':(coin.funding||0)<-0.02?'up':''}">${(coin.funding||0).toFixed(3)}%</span></div>
-          <div class="coin-meta-item">L/S:<span class="coin-meta-val">${(coin.lsRatio||1).toFixed(2)}</span></div>
-          <div class="coin-meta-item">VOL:<span class="coin-meta-val">${fmtCompact(coin.vol)}</span></div>
-          <div class="coin-meta-item">BIAS:<span class="coin-meta-val ${coin.bias.includes('bull')?'up':coin.bias.includes('bear')?'down':''}">${coin.bias.toUpperCase()}</span></div>
-          <div class="coin-meta-item">ENTRY:<span class="coin-meta-val" style="color:${coin.entryQuality==='EARLY'?'var(--green)':coin.entryQuality==='LATE'?'var(--red)':'var(--gold)'}">${coin.entryQuality||'—'}</span></div>
-        </div>`;
-    }
+      </div>
+      <div class="coin-tags">${sweepBadge}${validBadge}${stBadge}${spBadge}${coin.tags.map(t=>`<span class="scan-tag ${t.type}">${t.label}</span>`).join('')}</div>
+      <div class="coin-explanation">${coin.explanation}</div>
+      <div class="coin-meta">
+        <div class="coin-meta-item">ER:<span class="coin-meta-val">${(coin.er||0).toFixed(2)}</span></div>
+        <div class="coin-meta-item">TQI:<span class="coin-meta-val">${(coin.tqi||0).toFixed(2)}</span></div>
+        <div class="coin-meta-item">FUND:<span class="coin-meta-val ${(coin.funding||0)>0.05?'down':(coin.funding||0)<-0.02?'up':''}">${(coin.funding||0).toFixed(3)}%</span></div>
+        <div class="coin-meta-item">L/S:<span class="coin-meta-val">${(coin.lsRatio||1).toFixed(2)}</span></div>
+        <div class="coin-meta-item">VOL:<span class="coin-meta-val">${fmtCompact(coin.vol)}</span></div>
+        <div class="coin-meta-item">BIAS:<span class="coin-meta-val ${coin.bias.includes('bull')?'up':coin.bias.includes('bear')?'down':''}">${coin.bias.toUpperCase()}</span></div>
+        <div class="coin-meta-item">ENTRY:<span class="coin-meta-val" style="color:${coin.entryQuality==='EARLY'?'var(--green)':coin.entryQuality==='LATE'?'var(--red)':'var(--gold)'}">${coin.entryQuality||'—'}</span></div>
+      </div>`;
     card.addEventListener('click', () => {
       document.getElementById('tfSelect').value = document.getElementById('scanTfSelect').value;
       switchToAnalysis(coin.symbol);
