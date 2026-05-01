@@ -1675,11 +1675,11 @@ body{
         <button class="view-btn" id="btn-ranked">≡ RANKED</button>
       </div>
       <div class="filter-pills">
-        <button class="filter-pill active" data-filter="all">ALL</button>
-        <button class="filter-pill" data-filter="high_priority">⬆ HIGH PRIORITY</button>
-        <button class="filter-pill" data-filter="breakout">BREAKOUT</button>
-        <button class="filter-pill" data-filter="squeeze">SQUEEZE</button>
-        <button class="filter-pill" data-filter="trend">TREND</button>
+        <button class="filter-pill active" data-filter="all" id="pill-all">ALL</button>
+        <button class="filter-pill" data-filter="high_priority" id="pill-high">⬆ HIGH PRIORITY</button>
+        <button class="filter-pill" data-filter="breakout" id="pill-breakout">BREAKOUT</button>
+        <button class="filter-pill" data-filter="squeeze" id="pill-squeeze">SQUEEZE</button>
+        <button class="filter-pill" data-filter="trend" id="pill-trend">TREND</button>
       </div>
       <div class="scanner-stats" id="scanner-stats" style="display:none">
         <span>SCANNED <span class="scan-stat-val" id="stat-scanned">—</span></span>
@@ -1844,11 +1844,11 @@ body{
       <!-- Heatmap -->
       <div id="heatmap-view">
         <div id="heatmap-canvas-wrap" style="min-height:400px;position:relative;">
-          <div class="heatmap-legend">
-            <span style="color:var(--red)">◀ BEARISH</span>
-            <div class="heatmap-legend-bar" style="background:linear-gradient(90deg,rgba(255,40,40,0.8),rgba(200,160,50,0.7),rgba(0,230,118,0.85))"></div>
-            <span style="color:var(--green)">BULLISH ▶</span>
-            <span style="margin-left:12px;color:var(--muted)">SIZE = 24H VOLUME · COLOR = BIAS + SCORE</span>
+          <div class="heatmap-legend" id="heatmap-legend">
+            <span id="legend-left" style="color:var(--red)">◀ BEARISH</span>
+            <div class="heatmap-legend-bar" id="legend-bar" style="background:linear-gradient(90deg,rgba(255,40,40,0.8),rgba(200,160,50,0.7),rgba(0,230,118,0.85))"></div>
+            <span id="legend-right" style="color:var(--green)">BULLISH ▶</span>
+            <span id="legend-sub" style="margin-left:12px;color:var(--muted)">SIZE = 24H VOLUME · COLOR = BIAS + SCORE</span>
           </div>
         </div>
       </div>
@@ -4582,6 +4582,7 @@ function setScanMode(mode) {
   } else {
     info.textContent = 'Scans full Binance futures universe. Filters by $1M+ 24h volume. Context-aware scoring engine prioritises structure over compression.';
   }
+  _updatePillLabels();
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -5047,14 +5048,42 @@ async function runMarketScan() {
 // ═══════════════════════════════════════════════════════════════
 function getFilteredResults() {
   let r = [..._scanResults];
-  if (_currentFilter === 'high_priority') r=r.filter(x=>x.score>=80);
-  else if (_currentFilter === 'breakout') r=r.filter(x=>x.classType==='breakout');
-  else if (_currentFilter === 'squeeze') r=r.filter(x=>x.classType==='squeeze');
-  else if (_currentFilter === 'trend')   r=r.filter(x=>x.classType==='trend');
+  if (_scanMode === 'radar') {
+    // Radar filters: by energy tier and signal type
+    if (_currentFilter === 'high_priority') r = r.filter(x => x.score >= 70);
+    else if (_currentFilter === 'breakout')  r = r.filter(x => x.signal === 'COIL + LIQ' || x.signal === 'TIGHT COIL');
+    else if (_currentFilter === 'squeeze')   r = r.filter(x => x.signal === 'SQUEEZE BUILD');
+    else if (_currentFilter === 'trend')     r = r.filter(x => x.signal === 'LIQ MAGNET' || x.signal === 'VOL DRY + COIL');
+  } else {
+    if (_currentFilter === 'high_priority') r=r.filter(x=>x.score>=80);
+    else if (_currentFilter === 'breakout') r=r.filter(x=>x.classType==='breakout');
+    else if (_currentFilter === 'squeeze') r=r.filter(x=>x.classType==='squeeze');
+    else if (_currentFilter === 'trend')   r=r.filter(x=>x.classType==='trend');
+  }
   return r;
 }
 
+function _updatePillLabels() {
+  const p = document.getElementById('pill-high');
+  const b = document.getElementById('pill-breakout');
+  const s = document.getElementById('pill-squeeze');
+  const t = document.getElementById('pill-trend');
+  if (!p) return;
+  if (_scanMode === 'radar') {
+    p.textContent = '⚡ HIGH ENERGY';
+    b.textContent = 'COIL + LIQ';
+    s.textContent = 'SQUEEZE BUILD';
+    t.textContent = 'LIQ MAGNET';
+  } else {
+    p.textContent = '⬆ HIGH PRIORITY';
+    b.textContent = 'BREAKOUT';
+    s.textContent = 'SQUEEZE';
+    t.textContent = 'TREND';
+  }
+}
+
 function renderCurrentView() {
+  _updatePillLabels();
   const results = getFilteredResults();
   if (_currentView === 'heatmap') renderHeatmap(results);
   else renderRankedList(results);
@@ -5086,6 +5115,23 @@ function renderHeatmap(results) {
 
   const W = wrap.offsetWidth || 800;
   const legendH = 32;
+
+  // Update legend to match current scan mode
+  const _legendLeft  = document.getElementById('legend-left');
+  const _legendBar   = document.getElementById('legend-bar');
+  const _legendRight = document.getElementById('legend-right');
+  const _legendSub   = document.getElementById('legend-sub');
+  if (_scanMode === 'radar') {
+    if (_legendLeft)  { _legendLeft.textContent = '◎ LOW ENERGY'; _legendLeft.style.color = 'rgba(200,120,40,0.8)'; }
+    if (_legendBar)   _legendBar.style.background = 'linear-gradient(90deg,rgba(150,80,20,0.6),rgba(255,160,40,0.75),rgba(255,200,20,0.9))';
+    if (_legendRight) { _legendRight.textContent = '⚡ HIGH ENERGY'; _legendRight.style.color = 'rgba(255,160,40,1)'; }
+    if (_legendSub)   _legendSub.textContent = 'SIZE = 24H VOLUME · COLOR = ENERGY SCORE · ⚡ = HIGH · ◎ = MID';
+  } else {
+    if (_legendLeft)  { _legendLeft.textContent = '◀ BEARISH'; _legendLeft.style.color = 'var(--red)'; }
+    if (_legendBar)   _legendBar.style.background = 'linear-gradient(90deg,rgba(255,40,40,0.8),rgba(200,160,50,0.7),rgba(0,230,118,0.85))';
+    if (_legendRight) { _legendRight.textContent = 'BULLISH ▶'; _legendRight.style.color = 'var(--green)'; }
+    if (_legendSub)   _legendSub.textContent = 'SIZE = 24H VOLUME · COLOR = BIAS + SCORE';
+  }
   const totalH = Math.max(400, Math.min(600, results.length * 3));
   wrap.style.height = (totalH + legendH) + 'px';
 
@@ -5115,10 +5161,18 @@ function renderHeatmap(results) {
 
   // Direction-aware color: GREEN = bullish high-confidence, RED = bearish high-confidence
   // Gold = neutral/mixed regardless of score. Dim = low confidence.
-  const scoreToColor = (score, bias) => {
+  const scoreToColor = (score, bias, classType) => {
     const isBull = bias && (bias.includes('bull'));
     const isBear = bias && (bias.includes('bear'));
     const alpha = 0.45 + (score / 100) * 0.45; // opacity scales with score
+
+    // RADAR MODE: color = energy intensity, not direction
+    // High energy (≥70) = vivid orange. Mid (50-69) = amber. Low = dim brown.
+    if (classType === 'radar') {
+      if (score >= 70) return `rgba(255,${Math.round(120+(score-70)*2.5)},20,${alpha})`;
+      if (score >= 55) return `rgba(255,${Math.round(160+(score-55)*3)},40,${alpha - 0.05})`;
+      return `rgba(200,120,40,${alpha - 0.15})`;
+    }
 
     if (isBull) {
       // Bullish: dark green (low score) → vivid green (high score)
@@ -5151,10 +5205,15 @@ function renderHeatmap(results) {
       const w = Math.floor(rawWidths[ci] * scale);
       const block = document.createElement('div');
       block.className = 'heatmap-block';
-      block.style.cssText = `left:${xOffset}px;top:${yOffset}px;width:${w}px;height:${rowH}px;background:${scoreToColor(coin.score, coin.bias)};`;
+      block.style.cssText = `left:${xOffset}px;top:${yOffset}px;width:${w}px;height:${rowH}px;background:${scoreToColor(coin.score, coin.bias, coin.classType)};`;
       const fontSize = Math.max(8, Math.min(16, w/6));
-      const biasIcon = coin.bias && coin.bias.includes('bull') ? '▲' : coin.bias && coin.bias.includes('bear') ? '▼' : '◆';
-      const biasIconColor = coin.bias && coin.bias.includes('bull') ? 'rgba(0,230,118,0.9)' : coin.bias && coin.bias.includes('bear') ? 'rgba(255,80,80,0.9)' : 'rgba(255,213,79,0.8)';
+      const isRadarBlock = coin.classType === 'radar';
+      const biasIcon = isRadarBlock
+        ? (coin.score >= 70 ? '⚡' : coin.score >= 55 ? '◎' : '·')
+        : (coin.bias && coin.bias.includes('bull') ? '▲' : coin.bias && coin.bias.includes('bear') ? '▼' : '◆');
+      const biasIconColor = isRadarBlock
+        ? (coin.score >= 70 ? 'rgba(255,160,40,0.95)' : coin.score >= 55 ? 'rgba(255,200,80,0.8)' : 'rgba(160,100,40,0.6)')
+        : (coin.bias && coin.bias.includes('bull') ? 'rgba(0,230,118,0.9)' : coin.bias && coin.bias.includes('bear') ? 'rgba(255,80,80,0.9)' : 'rgba(255,213,79,0.8)');
       block.innerHTML = `
         <span class="heatmap-block-sym" style="font-size:${fontSize}px">${coin.symbol}</span>
         <span class="heatmap-block-score" style="font-size:${Math.max(7,fontSize-2)}px">${coin.score}</span>
