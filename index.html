@@ -1677,9 +1677,20 @@ body{
       <div class="filter-pills">
         <button class="filter-pill active" data-filter="all" id="pill-all">ALL</button>
         <button class="filter-pill" data-filter="high_priority" id="pill-high">⬆ HIGH PRIORITY</button>
-        <button class="filter-pill" data-filter="breakout" id="pill-breakout">BREAKOUT</button>
-        <button class="filter-pill" data-filter="squeeze" id="pill-squeeze">SQUEEZE</button>
-        <button class="filter-pill" data-filter="trend" id="pill-trend">TREND</button>
+        <!-- Setups mode pills -->
+        <button class="filter-pill setups-pill" data-filter="breakout" id="pill-breakout">BREAKOUT</button>
+        <button class="filter-pill setups-pill" data-filter="squeeze" id="pill-squeeze">SQUEEZE</button>
+        <button class="filter-pill setups-pill" data-filter="trend" id="pill-trend">TREND</button>
+        <button class="filter-pill setups-pill" data-filter="ms_trend" id="pill-ms-trend" style="display:none">📈 TREND</button>
+        <button class="filter-pill setups-pill" data-filter="ms_range" id="pill-ms-range" style="display:none">↔ RANGE</button>
+        <button class="filter-pill setups-pill" data-filter="ms_transition" id="pill-ms-transition" style="display:none">⚡ TRANSITION</button>
+        <button class="filter-pill setups-pill" data-filter="ms_expansion" id="pill-ms-expansion" style="display:none">🚀 EXPANSION</button>
+        <!-- Radar mode pills -->
+        <button class="filter-pill radar-pill" data-filter="bull_lean" id="pill-bull-lean" style="display:none">▲ BULL LEAN</button>
+        <button class="filter-pill radar-pill" data-filter="bear_lean" id="pill-bear-lean" style="display:none">▼ BEAR LEAN</button>
+        <button class="filter-pill radar-pill" data-filter="trigger_zone" id="pill-trigger" style="display:none">TRIGGER ZONE</button>
+        <button class="filter-pill radar-pill" data-filter="mom_shift" id="pill-mom" style="display:none">MOM SHIFT</button>
+        <button class="filter-pill radar-pill" data-filter="coil_liq" id="pill-coil" style="display:none">COIL + LIQ</button>
       </div>
       <div class="scanner-stats" id="scanner-stats" style="display:none">
         <span>SCANNED <span class="scan-stat-val" id="stat-scanned">—</span></span>
@@ -4574,6 +4585,10 @@ async function processWithConcurrency(items, fn, concurrency=6, onProgress) {
 // ═══════════════════════════════════════════════════════════════
 function setScanMode(mode) {
   _scanMode = mode;
+  // Reset filter to ALL when switching modes so stale filter keys don't carry over
+  _currentFilter = 'all';
+  document.querySelectorAll('.filter-pill').forEach(p => p.classList.remove('active'));
+  document.getElementById('pill-all').classList.add('active');
   document.getElementById('modeSetups').classList.toggle('active', mode === 'setups');
   document.getElementById('modeRadar').classList.toggle('active', mode === 'radar');
   const info = document.getElementById('drawer-mode-info');
@@ -5244,37 +5259,52 @@ async function runMarketScan() {
 function getFilteredResults() {
   let r = [..._scanResults];
   if (_scanMode === 'radar') {
-    // Radar filters: by energy tier and signal type
-    if (_currentFilter === 'high_priority') r = r.filter(x => x.score >= 75);
-    else if (_currentFilter === 'breakout')  r = r.filter(x => x.signal === 'COIL + LIQ' || x.signal === 'TIGHT COIL');
-    else if (_currentFilter === 'squeeze')   r = r.filter(x => x.signal === 'SQUEEZE BUILD');
-    else if (_currentFilter === 'trend')     r = r.filter(x => x.signal === 'LIQ MAGNET' || x.signal === 'VOL DRY + COIL');
+    if      (_currentFilter === 'high_priority') r = r.filter(x => x.score >= 75);
+    else if (_currentFilter === 'bull_lean')     r = r.filter(x => x.lean === 'BULL');
+    else if (_currentFilter === 'bear_lean')     r = r.filter(x => x.lean === 'BEAR');
+    else if (_currentFilter === 'trigger_zone')  r = r.filter(x => (x.signal||'').includes('TRIGGER'));
+    else if (_currentFilter === 'mom_shift')     r = r.filter(x => x.signal === 'MOMENTUM SHIFT');
+    else if (_currentFilter === 'coil_liq')      r = r.filter(x => x.signal === 'TIGHT COIL' || x.signal === 'COILING');
   } else {
-    if (_currentFilter === 'high_priority') r=r.filter(x=>x.score>=80);
-    else if (_currentFilter === 'breakout') r=r.filter(x=>x.classType==='breakout');
-    else if (_currentFilter === 'squeeze') r=r.filter(x=>x.classType==='squeeze');
-    else if (_currentFilter === 'trend')   r=r.filter(x=>x.classType==='trend');
+    if      (_currentFilter === 'high_priority')   r = r.filter(x => x.score >= 80);
+    else if (_currentFilter === 'breakout')        r = r.filter(x => x.classType === 'breakout');
+    else if (_currentFilter === 'squeeze')         r = r.filter(x => x.classType === 'squeeze');
+    else if (_currentFilter === 'trend')           r = r.filter(x => x.classType === 'trend');
+    else if (_currentFilter === 'ms_trend')        r = r.filter(x => x.marketState === 'TREND');
+    else if (_currentFilter === 'ms_range')        r = r.filter(x => x.marketState === 'RANGE');
+    else if (_currentFilter === 'ms_transition')   r = r.filter(x => x.marketState === 'TRANSITION');
+    else if (_currentFilter === 'ms_expansion')    r = r.filter(x => x.marketState === 'EXPANSION');
   }
   return r;
 }
 
 function _updatePillLabels() {
-  const p = document.getElementById('pill-high');
-  const b = document.getElementById('pill-breakout');
-  const s = document.getElementById('pill-squeeze');
-  const t = document.getElementById('pill-trend');
-  if (!p) return;
-  if (_scanMode === 'radar') {
-    p.textContent = '⚡ PRE-BURST';
-    b.textContent = 'TRIGGER ZONE';
-    s.textContent = 'MOM SHIFT';
-    t.textContent = 'COIL + LIQ';
-  } else {
-    p.textContent = '⬆ HIGH PRIORITY';
-    b.textContent = 'BREAKOUT';
-    s.textContent = 'SQUEEZE';
-    t.textContent = 'TREND';
+  const isRadar = _scanMode === 'radar';
+
+  // Setups-only pills
+  document.querySelectorAll('.setups-pill').forEach(p => {
+    const id = p.id;
+    // Always hide ms_ pills by default; show them below based on mode
+    const isMs = id.startsWith('pill-ms-');
+    const isClass = ['pill-breakout','pill-squeeze','pill-trend'].includes(id);
+    p.style.display = (isRadar) ? 'none' : (isClass ? '' : 'none');
+  });
+  // Show market state pills in setups mode
+  if (!isRadar) {
+    ['pill-ms-trend','pill-ms-range','pill-ms-transition','pill-ms-expansion'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = '';
+    });
   }
+
+  // Radar-only pills
+  document.querySelectorAll('.radar-pill').forEach(p => {
+    p.style.display = isRadar ? '' : 'none';
+  });
+
+  // pill-high label
+  const ph = document.getElementById('pill-high');
+  if (ph) ph.textContent = isRadar ? '⚡ PRE-BURST' : '⬆ HIGH PRIORITY';
 }
 
 function renderCurrentView() {
