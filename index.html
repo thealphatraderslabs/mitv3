@@ -2656,6 +2656,17 @@ function validateSetup(ctx, structureType, setup) {
   if (isBear && stTrend === 1 && trendingUp)
     return { valid: false, reason: 'BEAR_BIAS_BULL_TREND' };
 
+  // Rule 2c: BIAS vs STRUCTURE contradiction — the bounce-in-downtrend false positive.
+  // Root cause: a small bounce fires recentCHOCH_up → bias = 'bullish_transition' → isBull = true,
+  // while detectStructureType correctly reads the broader LL/LH sequence as 'trend_down'.
+  // These two directly contradict. The swing-sequence classification (structureType) covers more
+  // history than the 20-bar CHoCH recency window — it wins. Reject the setup.
+  // Mirror: a small dip in an uptrend fires isBear but structureType = 'trend_up' → reject.
+  if (structureType.type === 'trend_down' && isBull)
+    return { valid: false, reason: 'BULL_BIAS_IN_TREND_DOWN' };
+  if (structureType.type === 'trend_up' && isBear)
+    return { valid: false, reason: 'BEAR_BIAS_IN_TREND_UP' };
+
   // Rule 4: Weak trend — no directional conviction → reject continuation setups
   // tqi < 0.30 = very weak momentum, trendStrength = 'weak'
   if (trendStrength === 'weak' && setup.type === 'continuation')
@@ -4018,7 +4029,7 @@ function updateTradeIdeas(data) {
   document.getElementById('scenarios-wrap').innerHTML = biasMeter + primaryCard + counterCard + atrRow + smcChecklist;
 }
 
-function generateTradeIdeas(candles, stData, swings, fvgs, srLevels, rsi, er, tqi, currentPrice, derivData, pipelineResult) {
+function generateTradeIdeas(candles, stData, swings, fvgs, srLevels, rsi, er, tqi, currentPrice, derivData) {
   const n = candles.length;
   const lastTrend = stData.trend[n-1] || 1;
   const atrs = calcATR(candles, 14);
@@ -4068,18 +4079,8 @@ function generateTradeIdeas(candles, stData, swings, fvgs, srLevels, rsi, er, tq
   if (lsRatio>1.3) bearSMC+=10; else if (lsRatio>1.1) bearSMC+=5; else if (lsRatio<0.8) bullSMC+=10; else if (lsRatio<0.9) bullSMC+=5;
 
   const totalScore = bullSMC+bearSMC || 1;
-  const _localBullPct = Math.round(bullSMC/totalScore*100);
-  const _localPrimaryDir = bullSMC>=bearSMC ? 'LONG' : 'SHORT';
-
-  // SYNC-001 FIX: Align direction with the canonical pipeline bias when available.
-  // pipelineResult.bias is 'bullish'/'bearish'/'bullish_transition'/'bearish_transition'/'neutral'.
-  // This ensures the primary direction card matches what the scanner showed for this coin.
-  const primaryDir = (pipelineResult && pipelineResult.bias && pipelineResult.bias !== 'neutral')
-    ? (pipelineResult.bias.includes('bull') ? 'LONG' : 'SHORT')
-    : _localPrimaryDir;
-  const bullPct = (pipelineResult && pipelineResult.bias && pipelineResult.bias !== 'neutral')
-    ? (pipelineResult.bias.includes('bull') ? Math.max(_localBullPct, 55) : Math.min(_localBullPct, 45))
-    : _localBullPct;
+  const bullPct = Math.round(bullSMC/totalScore*100);
+  const primaryDir = bullSMC>=bearSMC ? 'LONG' : 'SHORT';
   const tradesBias = primaryDir === 'LONG' ? 'bullish' : 'bearish';
 
   // DEAD-001 FIX: Use calculateEntryQuality (main pipeline) instead of ENGINE.entryQuality.
@@ -4138,13 +4139,7 @@ function generateTradeIdeas(candles, stData, swings, fvgs, srLevels, rsi, er, tq
   );
   // HARD RULE: rejected setup → confidence = 0, always.
   // Showing 84% confidence on a rejected setup is dangerous and misleading.
-  const _localScore = tradeRejected ? 0 : _rawScore;
-
-  // SYNC-001 FIX: Use the canonical pipeline score (analyzeCoin) when available so
-  // the confidence shown here is identical to the score shown on the Scanner heatmap/ranked list.
-  // Fall back to the local weighted score only when pipelineResult is null (coin rejected by pipeline
-  // or Analysis page loaded standalone without a prior scan).
-  const weightedScore = (pipelineResult && !tradeRejected) ? pipelineResult.score : _localScore;
+  const weightedScore = tradeRejected ? 0 : _rawScore;
   const confidenceLabel = weightedScore > 75 ? 'High' : weightedScore >= 55 ? 'Medium' : 'Low';
   const confPips = tradeRejected ? 0 : Math.min(8, Math.round(Math.max(bullPct,100-bullPct)/12.5));
 
@@ -4454,10 +4449,7 @@ async function runAnalysis() {
       }
     }
 
-    // SYNC-001 FIX: Run the canonical pipeline so Trade Ideas and Scanner use the same score.
-    // analyzeCoin returns null when no valid setup exists — tradeData handles that via tradeRejected.
-    const _pipelineResult = analyzeCoin(c, derivData);
-    const tradeData = generateTradeIdeas(c, stData, swings, fvgs, srLevels, rsi, er, tqi, currentPrice, derivData, _pipelineResult);
+    const tradeData = generateTradeIdeas(c, stData, swings, fvgs, srLevels, rsi, er, tqi, currentPrice, derivData);
     _lastTradeData = { ...tradeData, ticker, tf, currentPrice, timestamp: new Date().toISOString() };
     updateTradeIdeas(tradeData);
 
@@ -4745,7 +4737,7 @@ async function runMarketScan() {
        <div style="margin-top:4px;font-size:8px;color:var(--muted);letter-spacing:0.06em">
          REJECTION BREAKDOWN ·
          <span style="color:var(--red)">${(rejectTally['INVALID_STRUCTURE']||0)+(rejectTally['NO_CLEAN_SETUP']||0)} NO STRUCT/SETUP</span> ·
-         <span style="color:var(--orange)">${(rejectTally['CONTRA_TREND_LONG_IN_DOWNTREND']||0)+(rejectTally['CONTRA_TREND_SHORT_IN_UPTREND']||0)+(rejectTally['BULL_BIAS_BEAR_BOS']||0)+(rejectTally['BEAR_BIAS_BULL_BOS']||0)+(rejectTally['BULL_BIAS_BEAR_TREND']||0)+(rejectTally['BEAR_BIAS_BULL_TREND']||0)} CONTRA-TREND</span> ·
+         <span style="color:var(--orange)">${(rejectTally['CONTRA_TREND_LONG_IN_DOWNTREND']||0)+(rejectTally['CONTRA_TREND_SHORT_IN_UPTREND']||0)+(rejectTally['BULL_BIAS_BEAR_BOS']||0)+(rejectTally['BEAR_BIAS_BULL_BOS']||0)+(rejectTally['BULL_BIAS_BEAR_TREND']||0)+(rejectTally['BEAR_BIAS_BULL_TREND']||0)+(rejectTally['BULL_BIAS_IN_TREND_DOWN']||0)+(rejectTally['BEAR_BIAS_IN_TREND_UP']||0)} CONTRA-TREND</span> ·
          <span style="color:var(--gold)">${rejectTally['LATE_ENTRY_REJECTED']||0} LATE ENTRY</span> ·
          <span style="color:var(--muted)">${(rejectTally['NO_VOLATILITY']||0)+(rejectTally['DEAD_MARKET']||0)} LOW VOL</span> ·
          <span style="color:var(--muted)">${(rejectTally['BULL_IN_PREMIUM_NO_PULLBACK']||0)+(rejectTally['BEAR_IN_DISCOUNT_NO_PULLBACK']||0)} PREMIUM/DISCOUNT</span> ·
